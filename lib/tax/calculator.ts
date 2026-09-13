@@ -9,8 +9,8 @@ import type {
   VacationResult,
 } from "./types";
 
-const money = (value: number) => Math.round((value + 1e-9) * 100) / 100;
-const sum = (values: number[]) =>
+export const money = (value: number) => Math.round((value + 1e-9) * 100) / 100;
+export const sum = (values: number[]) =>
   money(values.reduce((total, value) => total + value, 0));
 
 export function progressiveTax(
@@ -92,8 +92,22 @@ export function calculateVacation(
   const abonoBase = money(dailySalary * event.daysSold + event.abonoAverage);
   const abonoOneThird = money(abonoBase / 3);
   const exemptGross = money(abonoBase + abonoOneThird);
-  const inssCalculated = calculateInss(taxableGross);
-  const inssUsed = money(event.actualInss ?? inssCalculated);
+  // Allocate one progressive contribution across all vacation events in the same month.
+  const earlierGross = sum(
+    state.vacations
+      .slice(0, index)
+      .filter((item) => item.month === event.month)
+      .map((item) => {
+        const base = money(dailySalary * item.daysTaken + item.taxableAverage);
+        return money(base + money(base / 3));
+      }),
+  );
+  const inssCalculated = money(
+    calculateInss(earlierGross + taxableGross) - calculateInss(earlierGross),
+  );
+  const inssUsed = money(
+    event.inssOverrideEnabled ? (event.actualInss ?? 0) : inssCalculated,
+  );
   const irrf = calculateMonthlyIrrf(
     taxableGross,
     inssUsed + month.dependents * TAX_RULES_2026.dependentMonthly,
@@ -126,7 +140,7 @@ export function calculateMonthly(
   monthIndex: number,
   vacations: VacationResult[],
 ): MonthlyResult {
-  const month = state.months[monthIndex];
+  const month = pensionMonth(state, monthIndex);
   const vacationDays = Math.min(
     30,
     sum(
@@ -158,7 +172,9 @@ export function calculateMonthly(
   const inssCalculated = money(
     Math.max(0, calculateInss(grossTaxable + vacationGross) - vacationInss),
   );
-  const inssUsed = money(month.actualInss ?? inssCalculated);
+  const inssUsed = money(
+    month.inssOverrideEnabled ? (month.actualInss ?? 0) : inssCalculated,
+  );
   const detailedDeductions = money(
     inssUsed +
       month.dependents * TAX_RULES_2026.dependentMonthly +
@@ -177,6 +193,13 @@ export function calculateMonthly(
       )
       .map((event) => event.netAdvance),
   );
+  // The next payroll settles the vacation entitlement and deducts any advance
+  // already paid. Never deduct that advance from unrelated ordinary salary twice.
+  const vacationSettlementCredit = sum(
+    vacations
+      .filter((event) => event.month + 1 === monthIndex)
+      .map((event) => event.netAdvance),
+  );
   const netIncome = money(
     grossTaxable +
       month.nonTaxable -
@@ -186,7 +209,9 @@ export function calculateMonthly(
       month.otherLegalDeductions -
       month.pgblPayroll -
       month.vgblPayroll -
-      vacationAdvanceDeduction,
+      month.nonDeductiblePayroll -
+      vacationAdvanceDeduction +
+      vacationSettlementCredit,
   );
 
   return {
@@ -202,33 +227,137 @@ export function calculateMonthly(
     irrfCalculated: irrf.tax,
     irrfUsed,
     vacationAdvanceDeduction,
+    vacationSettlementCredit,
     netIncome,
     fgts: money(grossTaxable * TAX_RULES_2026.fgtsRate),
   };
 }
 
+// Annual entry is not arbitrarily divided by 12: monthly tax cannot be inferred.
 export function calculateCarneLeao(state: TaxState): CarneLeaoMonth[] {
-  return state.months.map((_, month) => {
-    const entries = state.extraIncome.filter(
-      (entry) => entry.month === month && entry.payerType !== "legalEntity",
+  let carriedExpenses = 0;
+  return state.months.map((payroll, month) => {
+    const all = state.extraIncome.filter(
+      (e) => e.entryMode !== "annual" && e.month === month,
     );
-    const gross = sum(entries.map((entry) => entry.gross));
-    if (gross === 0) {
-      return { month, gross: 0, deductions: 0, taxableBase: 0, taxDue: 0 };
-    }
-    const legalDeductions = sum([
-      ...entries.map((entry) => entry.deductibleExpenses + entry.inss),
-      state.dependents.length * TAX_RULES_2026.dependentMonthly,
+    const entries = all.filter((e) => e.payerType !== "legalEntity");
+    const serviceGross = sum(
+      all.filter((e) => e.type === "services").map((e) => e.gross),
+    );
+    const serviceExpenses = sum(
+      all.filter((e) => e.type === "services").map((e) => e.deductibleExpenses),
+    );
+    const bookUsed = money(
+      Math.min(serviceGross, serviceExpenses + carriedExpenses),
+    );
+    carriedExpenses = money(
+      Math.max(0, serviceExpenses + carriedExpenses - bookUsed),
+    );
+    const gross = sum(entries.map(entryTaxableGross));
+    const legal = sum([
+      ...entries.map((e) => e.inss),
+      bookUsed,
+      Math.max(0, state.dependents.length - payroll.dependents) *
+        TAX_RULES_2026.dependentMonthly,
     ]);
-    const result = calculateMonthlyIrrf(gross, legalDeductions);
+    const result = calculateMonthlyIrrf(gross, legal);
     return {
       month,
       gross,
       deductions: result.deductionUsed,
       taxableBase: result.taxableBase,
       taxDue: result.tax,
+      taxPaid: sum(
+        entries.map((e) => (e.carneLeaoPaid ? e.carneLeaoPaidAmount : 0)),
+      ),
     };
   });
+}
+
+export function pensionMonth(state: TaxState, index: number) {
+  const month = state.months[index];
+  if (!state.retirement.automatic) return month;
+  // Contractual gross salary is the explicit basis selected for compulsory contributions.
+  return {
+    ...month,
+    pgblPayroll: money((month.salary * state.retirement.pgblPercent) / 100),
+    vgblPayroll: money((month.salary * state.retirement.vgblPercent) / 100),
+  };
+}
+
+const entryTaxableGross = (entry: TaxState["extraIncome"][number]) =>
+  money(
+    Math.max(
+      0,
+      entry.gross -
+        (entry.type === "rent"
+          ? Math.min(entry.gross, entry.deductibleExpenses)
+          : 0),
+    ),
+  );
+
+export function calculateThirteenth(state: TaxState) {
+  const extraAverage =
+    sum(
+      state.months.map(
+        (m) => m.overtime + m.commission + m.bonus + m.otherTaxable,
+      ),
+    ) / 12;
+  const gross = money(
+    state.events.thirteenthGrossOverrideEnabled
+      ? state.events.thirteenthGross
+      : state.months[11].salary + extraAverage,
+  );
+  const inss = money(
+    state.events.thirteenthInssOverrideEnabled
+      ? state.events.thirteenthInss
+      : calculateInss(gross),
+  );
+  const result = calculateMonthlyIrrf(
+    gross,
+    inss + state.months[11].dependents * TAX_RULES_2026.dependentMonthly,
+  );
+  const irrfUsed = money(
+    state.events.thirteenthIrrfOverrideEnabled
+      ? (state.events.thirteenthIrrf ?? 0)
+      : result.tax,
+  );
+  const firstInstallment = money(gross / 2);
+  return {
+    gross,
+    inss,
+    taxableBase: result.taxableBase,
+    tax: result.tax,
+    irrfUsed,
+    firstInstallment,
+    secondInstallment: money(gross - firstInstallment - inss - irrfUsed),
+  };
+}
+
+function bookDeductions(state: TaxState) {
+  let carry = 0;
+  let used = 0;
+  for (let month = 0; month < 12; month++) {
+    const entries = state.extraIncome.filter(
+      (e) =>
+        e.type === "services" && e.entryMode !== "annual" && e.month === month,
+    );
+    const gross = sum(entries.map((e) => e.gross));
+    const expenses = sum(entries.map((e) => e.deductibleExpenses));
+    const deducted = money(Math.min(gross, expenses + carry));
+    carry = money(Math.max(0, expenses + carry - deducted));
+    used = sum([used, deducted]);
+  }
+  const annual = state.extraIncome.filter(
+    (e) => e.type === "services" && e.entryMode === "annual",
+  );
+  return sum([
+    used,
+    Math.min(
+      sum(annual.map((e) => e.gross)),
+      sum(annual.map((e) => e.deductibleExpenses)),
+    ),
+  ]);
 }
 
 function buildDeclaration(
@@ -250,7 +379,7 @@ function buildDeclaration(
       taxBeforeReduction - annualReduction(grossTaxable, taxBeforeReduction),
     ),
   );
-  const taxDue = money(adjustmentTax + exclusiveTax);
+  const taxDue = adjustmentTax; // Exclusive withholding never enters the annual adjustment.
 
   return {
     model,
@@ -266,13 +395,6 @@ function buildDeclaration(
   };
 }
 
-function calculateThirteenthTax(state: TaxState) {
-  const deductions =
-    state.events.thirteenthInss +
-    state.dependents.length * TAX_RULES_2026.dependentMonthly;
-  return calculateMonthlyIrrf(state.events.thirteenthGross, deductions).tax;
-}
-
 function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
   const vacations = state.vacations.map((_, index) =>
     calculateVacation(state, index),
@@ -281,16 +403,13 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
     calculateMonthly(state, index, vacations),
   );
   const carneLeao = calculateCarneLeao(state);
+  const thirteenth = calculateThirteenth(state);
 
   const payrollGross = sum(months.map((month) => month.grossTaxable));
   const vacationTaxable = sum(vacations.map((event) => event.taxableGross));
   const vacationExempt = sum(vacations.map((event) => event.exemptGross));
   const otherExempt = sum(months.map((month) => month.nonTaxable));
-  const extraIncome = sum(
-    state.extraIncome.map((entry) =>
-      Math.max(0, entry.gross - entry.deductibleExpenses),
-    ),
-  );
+  const extraIncome = sum(state.extraIncome.map(entryTaxableGross));
   const dependentIncome = sum(
     state.dependents.map((dependent) =>
       dependent.hasTaxableIncome ? dependent.taxableIncome : 0,
@@ -302,11 +421,12 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
     extraIncome,
     dependentIncome,
   ]);
-  const annualInss = sum([
+  const deductibleInss = sum([
     ...months.map((month) => month.inssUsed),
     ...vacations.map((event) => event.inssUsed),
     ...state.extraIncome.map((entry) => entry.inss),
   ]);
+  const annualInss = sum([deductibleInss, thirteenth.inss]);
   const monthlyPension = sum(months.map((month) => month.pension));
   const payrollPgbl = sum(months.map((month) => month.pgblPayroll));
   const pgblContributed = sum([
@@ -332,7 +452,9 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
     state.dependents.map((dependent) => dependent.medical),
   );
   const completeDeductions = sum([
-    annualInss,
+    deductibleInss,
+    bookDeductions(state),
+    ...months.map((month) => month.otherLegalDeductions),
     state.dependents.length * TAX_RULES_2026.dependentAnnual,
     monthlyPension,
     state.deductions.judicialPension,
@@ -346,27 +468,37 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
     Math.min(grossTaxable * 0.2, TAX_RULES_2026.annualSimplifiedCap),
   );
   const plrTax = progressiveTax(state.events.plrGross, TAX_RULES_2026.plr);
-  const thirteenthTax = calculateThirteenthTax(state);
+  const thirteenthTax = thirteenth.tax;
   const exclusiveTax = sum([plrTax, thirteenthTax]);
-  const plrWithheld = money(state.events.plrIrrf ?? plrTax);
-  const thirteenthWithheld = money(
-    state.events.thirteenthIrrf ?? thirteenthTax,
+  const plrWithheld = money(
+    state.events.plrIrrfOverrideEnabled ? (state.events.plrIrrf ?? 0) : plrTax,
   );
+  const thirteenthWithheld = thirteenth.irrfUsed;
   const totalWithheld = sum([
     ...months.map((month) => month.irrfUsed),
     ...vacations.map((event) => event.irrfUsed),
-    ...state.extraIncome.map((entry) => entry.withheldIrrf),
+    ...state.extraIncome
+      .filter((e) => e.payerType === "legalEntity")
+      .map((entry) => entry.withheldIrrf),
     plrWithheld,
     thirteenthWithheld,
   ]);
   const totalCarneLeao = sum(carneLeao.map((item) => item.taxDue));
-  const totalPrepaid = sum([totalWithheld, totalCarneLeao]);
+  const adjustmentWithheld = money(
+    totalWithheld - plrWithheld - thirteenthWithheld,
+  );
+  const totalCarneLeaoPaid = sum(
+    state.extraIncome
+      .filter((e) => e.payerType !== "legalEntity" && e.carneLeaoPaid)
+      .map((e) => e.carneLeaoPaidAmount),
+  );
+  const totalPrepaid = sum([adjustmentWithheld, totalCarneLeaoPaid]);
 
   const complete = buildDeclaration(
     "complete",
     grossTaxable,
     completeDeductions,
-    totalWithheld,
+    adjustmentWithheld,
     totalPrepaid,
     exclusiveTax,
   );
@@ -374,7 +506,7 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
     "simplified",
     grossTaxable,
     simplifiedDeductions,
-    totalWithheld,
+    adjustmentWithheld,
     totalPrepaid,
     exclusiveTax,
   );
@@ -386,27 +518,27 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
   const totalFgts = sum([
     ...months.map((month) => month.fgts),
     ...vacations.map((event) => event.fgts),
-    state.events.thirteenthGross * TAX_RULES_2026.fgtsRate,
+    thirteenth.gross * TAX_RULES_2026.fgtsRate,
   ]);
   const extraNet = sum(
     state.extraIncome.map(
       (entry) =>
         entry.gross -
-        entry.deductibleExpenses -
+        (entry.type === "proLabore" ? 0 : entry.deductibleExpenses) -
         entry.inss -
-        entry.withheldIrrf,
+        (entry.payerType === "legalEntity" ? entry.withheldIrrf : 0),
     ),
   );
   const totalNetIncome = sum([
     ...months.map((month) => month.netIncome),
-    ...vacations.map((event) => event.netAdvance),
+    ...vacations
+      .filter((event) => event.receivedAdvance)
+      .map((event) => event.netAdvance),
     extraNet,
     dependentIncome,
-    state.events.thirteenthGross -
-      thirteenthWithheld -
-      state.events.thirteenthInss,
+    thirteenth.gross - thirteenthWithheld - thirteenth.inss,
     state.events.plrGross - plrWithheld,
-    -totalCarneLeao,
+    -totalCarneLeaoPaid,
   ]);
 
   return {
@@ -418,12 +550,63 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
     recommended,
     totalGrossIncome: sum([
       grossTaxable,
+      sum(state.extraIncome.map((e) => e.gross)) - extraIncome,
       vacationExempt,
       otherExempt,
-      state.events.thirteenthGross,
+      thirteenth.gross,
       state.events.plrGross,
     ]),
     annualInss,
+    deductibleInss,
+    thirteenth,
+    employerMatch: sum(
+      months.map((m) =>
+        money(
+          ((m.pgblPayroll + m.vgblPayroll) *
+            state.retirement.employerMatchPercent) /
+            100,
+        ),
+      ),
+    ),
+    totalCarneLeaoPaid,
+    warnings: [
+      ...(state.extraIncome.some(
+        (e) => e.entryMode === "annual" && e.payerType !== "legalEntity",
+      )
+        ? [
+            "Renda anual direta: o Carnê-Leão mensal não pode ser apurado sem as datas e os valores de cada recebimento. Não foi dividido por 12.",
+          ]
+        : []),
+      ...(carneLeao.some((m) => m.taxDue > m.taxPaid)
+        ? [
+            "Há Carnê-Leão devido sem recolhimento integral informado. Somente o principal efetivamente pago é compensado; verifique vencimentos, multa e juros no Sicalc.",
+          ]
+        : []),
+      ...(plrWithheld !== plrTax || thirteenthWithheld !== thirteenthTax
+        ? [
+            "IRRF exclusivo informado diverge do previsto. Confira com a fonte pagadora: a diferença de PLR/13º não é compensada no ajuste anual.",
+          ]
+        : []),
+      ...(months.some(
+        (m) =>
+          m.inssUsed +
+            sum(
+              vacations
+                .filter((v) => v.month === m.month)
+                .map((v) => v.inssUsed),
+            ) >
+          calculateInss(1e9),
+      )
+        ? [
+            "Overrides de INSS excedem o teto de uma competência. Confira os recibos de férias e o holerite para não repetir o mesmo desconto.",
+          ]
+        : []),
+      ...(grossTaxable > 600000
+        ? [
+            "Renda elevada: tributação mínima de altas rendas e situações especiais não são abrangidas por esta projeção CLT.",
+          ]
+        : []),
+    ],
     totalFgts,
     totalWithheld,
     totalCarneLeao,
@@ -437,7 +620,7 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
       vacationExempt,
       extraIncome,
       dependentIncome,
-      thirteenth: money(state.events.thirteenthGross),
+      thirteenth: thirteenth.gross,
       plr: money(state.events.plrGross),
       otherExempt,
     },
@@ -475,7 +658,11 @@ export function calculatePgblOpportunity(state: TaxState) {
   return {
     current,
     optimized,
-    taxSavings: money(current.complete.taxDue - optimized.complete.taxDue),
-    balanceGain: money(optimized.complete.balance - current.complete.balance),
+    taxSavings: money(
+      Math.max(0, current.recommended.taxDue - optimized.recommended.taxDue),
+    ),
+    balanceGain: money(
+      Math.max(0, optimized.recommended.balance - current.recommended.balance),
+    ),
   };
 }

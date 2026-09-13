@@ -9,7 +9,6 @@ import {
 } from "react";
 import {
   ArrowDownRight,
-  ArrowRight,
   ArrowUpRight,
   BadgeCheck,
   Banknote,
@@ -17,7 +16,6 @@ import {
   Calculator,
   CalendarDays,
   Check,
-  ChevronRight,
   Download,
   FileSpreadsheet,
   Gauge,
@@ -64,6 +62,7 @@ import {
   calculatePgblOpportunity,
   calculateProjection,
 } from "@/lib/tax/calculator";
+import { TaxReference } from "./tax-reference";
 import { TAX_RULES_2026 } from "@/lib/tax/rules-2026";
 import {
   createDependent,
@@ -82,7 +81,8 @@ import type {
   VacationEvent,
 } from "@/lib/tax/types";
 
-type View = "dados" | "otimizacao" | "comparativo" | "dashboard";
+type View =
+  "dados" | "deducoes" | "otimizacao" | "comparativo" | "dashboard" | "tabelas";
 type DataSection =
   "holerites" | "ferias" | "eventos" | "previdencia" | "rendas" | "familia";
 
@@ -99,6 +99,20 @@ const navigation: Array<{
     label: "Dados do ano",
     short: "Dados",
     icon: FileSpreadsheet,
+  },
+  {
+    id: "deducoes",
+    step: 2,
+    label: "Deduções legais",
+    short: "Deduções",
+    icon: ReceiptText,
+  },
+  {
+    id: "tabelas",
+    step: 6,
+    label: "Tabelas oficiais",
+    short: "Tabelas",
+    icon: Calculator,
   },
   {
     id: "otimizacao",
@@ -130,7 +144,7 @@ const dataSections: Array<{
 }> = [
   { id: "holerites", label: "Holerites", icon: ReceiptText },
   { id: "ferias", label: "Férias", icon: CalendarDays },
-  { id: "eventos", label: "PLR e bônus", icon: Sparkles },
+  { id: "eventos", label: "PLR e 13º salário", icon: Sparkles },
   { id: "previdencia", label: "Previdência", icon: PiggyBank },
   { id: "rendas", label: "Rendas extras", icon: Landmark },
   { id: "familia", label: "Família", icon: Users },
@@ -140,24 +154,35 @@ const titles: Record<
   View,
   { eyebrow: string; title: string; description: string }
 > = {
+  deducoes: {
+    eyebrow: "Deduções legais",
+    title: "Deduções do titular e dependentes",
+    description:
+      "Valores comprovados, sem repetir despesas já informadas na folha.",
+  },
+  tabelas: {
+    eyebrow: "Ano-calendário 2026",
+    title: "Tabelas e regras oficiais",
+    description: "Consulta somente leitura · Exercício 2027.",
+  },
   dados: {
-    eyebrow: "Etapa 1 de 4",
+    eyebrow: "Planejamento 2026",
     title: "Dados e histórico do ano",
     description: "Organize holerites, férias, rendas extras e grupo familiar.",
   },
   otimizacao: {
-    eyebrow: "Etapa 2 de 4",
+    eyebrow: "Planejamento 2026",
     title: "Otimização tributária",
     description: "Audite deduções e dimensione um aporte estratégico em PGBL.",
   },
   comparativo: {
-    eyebrow: "Etapa 3 de 4",
+    eyebrow: "Planejamento 2026",
     title: "Simplificada ou completa?",
     description:
       "Compare os dois modelos com a mesma renda e os mesmos pagamentos.",
   },
   dashboard: {
-    eyebrow: "Etapa 4 de 4",
+    eyebrow: "Planejamento 2026",
     title: "Fechamento anual projetado",
     description: "Consolide renda, base líquida, retenções, INSS e FGTS.",
   },
@@ -179,7 +204,8 @@ const formatPercent = (value: number) =>
 const parseHash = (): View => {
   if (typeof window === "undefined") return "dashboard";
   const hash = window.location.hash.replace("#", "");
-  if (hash === "holerites" || hash === "configuracoes") return "dados";
+  if (dataSections.some((item) => item.id === hash) || hash === "configuracoes")
+    return "dados";
   if (hash === "pgbl") return "otimizacao";
   return navigation.some((item) => item.id === hash)
     ? (hash as View)
@@ -211,7 +237,8 @@ function StatusBadge({ status }: { status: PayrollMonth["status"] }) {
 }
 
 function BalanceLabel({ balance }: { balance: number }) {
-  const refund = balance >= 0;
+  if (balance === 0) return <span className="text-slate-300">Sem saldo</span>;
+  const refund = balance > 0;
   return (
     <span
       className={cn(
@@ -275,13 +302,23 @@ function MoneyInput({
 }) {
   return (
     <label className="field-label">
-      <span>{label}</span>
+      <span title={helper}>
+        {label}
+        {helper && (
+          <Info
+            className="ml-2 inline size-3.5"
+            aria-label="Ajuda disponível abaixo do campo"
+          />
+        )}
+      </span>
       <Input
         type="number"
         min={0}
         step="0.01"
         value={value}
-        onChange={(event) => onChange(Number(event.target.value) || 0)}
+        onChange={(event) =>
+          onChange(Math.max(0, Number(event.target.value) || 0))
+        }
       />
       {helper && <small>{helper}</small>}
     </label>
@@ -309,38 +346,6 @@ function Toggle({
       </span>
       <span>{label}</span>
     </label>
-  );
-}
-
-function StepStrip({
-  view,
-  onNavigate,
-}: {
-  view: View;
-  onNavigate: (view: View) => void;
-}) {
-  return (
-    <div className="step-strip" aria-label="Etapas do planejamento tributário">
-      {navigation.map((item) => {
-        const active = item.id === view;
-        const currentStep =
-          navigation.find((entry) => entry.id === view)?.step ?? 1;
-        const done = item.step < currentStep;
-        return (
-          <button
-            key={item.id}
-            className={cn("step-item", active && "active", done && "done")}
-            onClick={() => onNavigate(item.id)}
-          >
-            <span>{done ? <Check /> : item.step}</span>
-            <div>
-              <small>Etapa {item.step}</small>
-              <strong>{item.label}</strong>
-            </div>
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -429,38 +434,6 @@ function ProjectionChart({ projection }: { projection: Projection }) {
   );
 }
 
-function DataTabs({
-  section,
-  onChange,
-}: {
-  section: DataSection;
-  onChange: (section: DataSection) => void;
-}) {
-  return (
-    <div
-      className="subtabs"
-      role="tablist"
-      aria-label="Categorias de dados anuais"
-    >
-      {dataSections.map((item) => {
-        const Icon = item.icon;
-        return (
-          <button
-            key={item.id}
-            role="tab"
-            aria-selected={section === item.id}
-            className={cn(section === item.id && "active")}
-            onClick={() => onChange(item.id)}
-          >
-            <Icon />
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function PayrollTable({
   projection,
   onEditMonth,
@@ -523,7 +496,7 @@ function PayrollTable({
                   <td>{formatBRL(month.taxableBase)}</td>
                   <td>
                     {formatBRL(month.inssUsed)}
-                    {month.actualInss !== null && <small>real</small>}
+                    {month.inssOverrideEnabled && <small>manual</small>}
                   </td>
                   <td>
                     {formatBRL(month.irrfUsed)}
@@ -564,17 +537,15 @@ function PayrollTable({
               </td>
               <td>{formatBRL(projection.breakdown.thirteenth)}</td>
               <td>—</td>
+              <td>{formatBRL(projection.thirteenth.taxableBase)}</td>
+              <td>{formatBRL(projection.thirteenth.inss)}</td>
+              <td>{formatBRL(projection.thirteenth.irrfUsed)}</td>
               <td>
                 {formatBRL(
-                  Math.max(
-                    0,
-                    projection.breakdown.thirteenth - projection.thirteenthTax,
-                  ),
+                  projection.thirteenth.firstInstallment +
+                    projection.thirteenth.secondInstallment,
                 )}
               </td>
-              <td>—</td>
-              <td>{formatBRL(projection.thirteenthTax)}</td>
-              <td>—</td>
               <td />
             </tr>
           </tbody>
@@ -701,6 +672,44 @@ function VacationTable({
   );
 }
 
+function OverrideInput({
+  label,
+  enabled,
+  value,
+  calculated,
+  onToggle,
+  onChange,
+}: {
+  label: string;
+  enabled: boolean;
+  value: number | null;
+  calculated: number;
+  onToggle: (value: boolean) => void;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="override-box">
+      <Toggle
+        checked={enabled}
+        onChange={onToggle}
+        label={`Sobrescrever ${label}`}
+      />
+      {enabled ? (
+        <MoneyInput
+          label={`${label} informado`}
+          value={value ?? calculated}
+          onChange={onChange}
+        />
+      ) : (
+        <p className="text-sm text-slate-400">
+          {label} automático:{" "}
+          <strong className="text-white">{formatBRL(calculated)}</strong>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function EventsPanel({
   state,
   setState,
@@ -710,90 +719,117 @@ function EventsPanel({
   setState: React.Dispatch<React.SetStateAction<TaxState>>;
   projection: Projection;
 }) {
-  const setEvent = (key: keyof TaxState["events"], value: number | null) =>
+  const setEvent = (
+    key: keyof TaxState["events"],
+    value: number | boolean | null,
+  ) =>
     setState((current) => ({
       ...current,
       events: { ...current.events, [key]: value },
     }));
+  const toggle = (
+    key: keyof TaxState["events"],
+    field: keyof TaxState["events"],
+    value: boolean,
+    calculated: number,
+  ) =>
+    setState((current) => ({
+      ...current,
+      events: {
+        ...current.events,
+        [key]: value,
+        [field]:
+          value && current.events[field] === null
+            ? calculated
+            : current.events[field],
+      },
+    }));
+  const p = projection.thirteenth;
+  const plrUsed = state.events.plrIrrfOverrideEnabled
+    ? (state.events.plrIrrf ?? 0)
+    : projection.plrTax;
   return (
-    <div className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
-      <Card className="p-6">
-        <p className="section-kicker">Tributação exclusiva</p>
-        <h2 className="mt-1 font-semibold text-white">13º salário e PLR</h2>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <MoneyInput
-            label="13º bruto"
-            value={state.events.thirteenthGross}
-            onChange={(value) => setEvent("thirteenthGross", value)}
-          />
-          <MoneyInput
-            label="INSS do 13º"
-            value={state.events.thirteenthInss}
-            onChange={(value) => setEvent("thirteenthInss", value)}
-          />
-          <MoneyInput
-            label="IRRF do 13º"
-            value={state.events.thirteenthIrrf ?? projection.thirteenthTax}
-            onChange={(value) => setEvent("thirteenthIrrf", value)}
-            helper="Informe o valor do comprovante; deixe zerado para automático."
-          />
-          <MoneyInput
-            label="PLR bruta"
-            value={state.events.plrGross}
-            onChange={(value) => setEvent("plrGross", value)}
-          />
-          <MoneyInput
-            label="IRRF da PLR"
-            value={state.events.plrIrrf ?? projection.plrTax}
-            onChange={(value) => setEvent("plrIrrf", value)}
-            helper="Tabela exclusiva de PLR."
-          />
+    <div className="grid gap-5 xl:grid-cols-2">
+      <Card className="p-6 space-y-4">
+        <p className="section-kicker">Tributação exclusiva na fonte</p>
+        <h2>PLR</h2>
+        <MoneyInput
+          label="PLR bruta anual"
+          value={state.events.plrGross}
+          onChange={(v) => setEvent("plrGross", v)}
+        />
+        <OverrideInput
+          label="IRRF da PLR"
+          enabled={state.events.plrIrrfOverrideEnabled}
+          value={state.events.plrIrrf}
+          calculated={projection.plrTax}
+          onToggle={(v) =>
+            toggle("plrIrrfOverrideEnabled", "plrIrrf", v, projection.plrTax)
+          }
+          onChange={(v) => setEvent("plrIrrf", v)}
+        />
+        <div className="soft-stat">
+          <span>PLR líquida</span>
+          <strong>{formatBRL(state.events.plrGross - plrUsed)}</strong>
         </div>
+        <p className="text-sm text-slate-400">
+          A tabela incide sobre a PLR acumulada no ano. Bônus e comissões são
+          informados nos holerites.
+        </p>
       </Card>
-      <Card className="overflow-hidden">
-        <div className="section-heading">
-          <div>
-            <p className="section-kicker">Renda variável em folha</p>
-            <h2>Bônus por competência</h2>
-            <p>O bônus integra a renda mensal tributável e o FGTS projetado.</p>
+      <Card className="p-6 space-y-4">
+        <p className="section-kicker">Apuração separada</p>
+        <h2>13º salário</h2>
+        <p className="text-sm text-slate-400">
+          Projeção de 12/12 avos: salário base de dezembro + média dos ganhos
+          extras dos 12 meses. Para admissão, afastamento ou rescisão, informe o
+          bruto proporcional.
+        </p>
+        <OverrideInput
+          label="bruto do 13º"
+          enabled={state.events.thirteenthGrossOverrideEnabled}
+          value={state.events.thirteenthGross}
+          calculated={p.gross}
+          onToggle={(v) => setEvent("thirteenthGrossOverrideEnabled", v)}
+          onChange={(v) => setEvent("thirteenthGross", v)}
+        />
+        <OverrideInput
+          label="INSS do 13º"
+          enabled={state.events.thirteenthInssOverrideEnabled}
+          value={state.events.thirteenthInss}
+          calculated={p.inss}
+          onToggle={(v) => setEvent("thirteenthInssOverrideEnabled", v)}
+          onChange={(v) => setEvent("thirteenthInss", v)}
+        />
+        <OverrideInput
+          label="IRRF do 13º"
+          enabled={state.events.thirteenthIrrfOverrideEnabled}
+          value={state.events.thirteenthIrrf}
+          calculated={projection.thirteenthTax}
+          onToggle={(v) =>
+            toggle(
+              "thirteenthIrrfOverrideEnabled",
+              "thirteenthIrrf",
+              v,
+              projection.thirteenthTax,
+            )
+          }
+          onChange={(v) => setEvent("thirteenthIrrf", v)}
+        />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="soft-stat">
+            <span>1ª parcela · sem descontos</span>
+            <strong>{formatBRL(p.firstInstallment)}</strong>
+          </div>
+          <div className="soft-stat">
+            <span>2ª parcela · INSS e IRRF integrais</span>
+            <strong>{formatBRL(p.secondInstallment)}</strong>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="data-table min-w-[580px]">
-            <thead>
-              <tr>
-                <th>Mês</th>
-                <th>Salário</th>
-                <th>Bônus</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.months.map((month, index) => (
-                <tr key={month.id}>
-                  <td>
-                    <strong>{monthLabel(month.month)}</strong>
-                  </td>
-                  <td>{formatBRL(month.salary)}</td>
-                  <td>
-                    <InlineMoney
-                      value={month.bonus}
-                      onChange={(value) =>
-                        setState((current) => ({
-                          ...current,
-                          months: current.months.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? { ...item, bonus: value }
-                              : item,
-                          ),
-                        }))
-                      }
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <p className="text-sm text-slate-400">
+          O INSS do 13º entra no total anual pago, mas só deduz a base do
+          próprio 13º.
+        </p>
       </Card>
     </div>
   );
@@ -808,11 +844,11 @@ function RetirementTable({
   setState: React.Dispatch<React.SetStateAction<TaxState>>;
   projection: Projection;
 }) {
-  const totalPgbl = state.months.reduce(
+  const totalPgbl = projection.months.reduce(
     (sum, item) => sum + item.pgblPayroll,
     0,
   );
-  const totalVgbl = state.months.reduce(
+  const totalVgbl = projection.months.reduce(
     (sum, item) => sum + item.vgblPayroll,
     0,
   );
@@ -827,53 +863,142 @@ function RetirementTable({
         itemIndex === index ? { ...month, [key]: value } : month,
       ),
     }));
+  const setRetirement = (
+    key: keyof TaxState["retirement"],
+    value: number | boolean,
+  ) =>
+    setState((current) => ({
+      ...current,
+      retirement: { ...current.retirement, [key]: value },
+    }));
   return (
     <div className="grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
-      <Card className="overflow-hidden">
-        <div className="section-heading">
-          <div>
-            <p className="section-kicker">Desconto em folha</p>
-            <h2>PGBL e VGBL mensais</h2>
-            <p>
-              Somente PGBL entra no limite de dedução; VGBL afeta apenas o
-              líquido.
-            </p>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="data-table min-w-[620px]">
-            <thead>
-              <tr>
-                <th>Mês</th>
-                <th>PGBL em folha</th>
-                <th>VGBL em folha</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.months.map((month, index) => (
-                <tr key={month.id}>
-                  <td>
-                    <strong>{monthLabel(month.month)}</strong>
-                  </td>
-                  <td>
-                    <InlineMoney
-                      value={month.pgblPayroll}
-                      onChange={(value) => update(index, "pgblPayroll", value)}
-                    />
-                  </td>
-                  <td>
-                    <InlineMoney
-                      value={month.vgblPayroll}
-                      onChange={(value) => update(index, "vgblPayroll", value)}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
       <div className="space-y-5">
+        <Card className="p-6 space-y-4">
+          <h2>Contribuição compulsória</h2>
+          <Toggle
+            label="Preencher automaticamente os 12 meses por percentual"
+            checked={state.retirement.automatic}
+            onChange={(v) => {
+              setState((current) => ({
+                ...current,
+                months: !v
+                  ? projection.months.map((m) => ({
+                      ...current.months[m.month],
+                      pgblPayroll: m.pgblPayroll,
+                      vgblPayroll: m.vgblPayroll,
+                    }))
+                  : current.months,
+                retirement: { ...current.retirement, automatic: v },
+              }));
+            }}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <MoneyInput
+              label="PGBL · % do salário base bruto"
+              value={state.retirement.pgblPercent}
+              onChange={(v) => setRetirement("pgblPercent", Math.min(100, v))}
+            />
+            <MoneyInput
+              label="VGBL · % do salário base bruto"
+              value={state.retirement.vgblPercent}
+              onChange={(v) => setRetirement("vgblPercent", Math.min(100, v))}
+            />
+          </div>
+          <label className="field-label">
+            <span>Contrapartida da empresa sobre o aporte do empregado</span>
+            <select
+              className="input-select"
+              value={state.retirement.employerMatchPercent}
+              onChange={(e) =>
+                setRetirement("employerMatchPercent", Number(e.target.value))
+              }
+            >
+              {[0, 50, 80, 100].map((v) => (
+                <option key={v} value={v}>
+                  {v}%
+                </option>
+              ))}
+            </select>
+          </label>
+          <MoneyInput
+            label="PGBL pessoal já aportado fora da folha"
+            value={state.deductions.pgblDirect}
+            onChange={(v) =>
+              setState((current) => ({
+                ...current,
+                deductions: { ...current.deductions, pgblDirect: v },
+              }))
+            }
+          />
+          <p className="text-sm text-slate-400">
+            No modo percentual, alterações no salário atualizam os aportes
+            automaticamente. Ao desativar, os valores calculados ficam
+            disponíveis para edição manual. A contrapartida não é dedução
+            pessoal.
+          </p>
+        </Card>
+        <Card className="overflow-hidden">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">Desconto em folha</p>
+              <h2>PGBL e VGBL mensais</h2>
+              <p>
+                Somente PGBL entra no limite de dedução; VGBL afeta apenas o
+                líquido.
+              </p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="data-table min-w-[620px]">
+              <thead>
+                <tr>
+                  <th>Mês</th>
+                  <th>PGBL em folha</th>
+                  <th>VGBL em folha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projection.months.map((month, index) => (
+                  <tr key={month.id}>
+                    <td>
+                      <strong>{monthLabel(month.month)}</strong>
+                    </td>
+                    <td>
+                      <InlineMoney
+                        label={`PGBL de ${monthLabel(month.month)}`}
+                        disabled={state.retirement.automatic}
+                        value={month.pgblPayroll}
+                        onChange={(value) =>
+                          update(index, "pgblPayroll", value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <InlineMoney
+                        label={`VGBL de ${monthLabel(month.month)}`}
+                        disabled={state.retirement.automatic}
+                        value={month.vgblPayroll}
+                        onChange={(value) =>
+                          update(index, "vgblPayroll", value)
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+      <div className="space-y-5">
+        <MetricCard
+          label="Contrapartida anual da empresa"
+          value={formatBRL(projection.employerMatch)}
+          helper="Estimativa conforme percentual contratado, sem dedução no IRPF do empregado."
+          icon={Landmark}
+          tone="emerald"
+        />
         <MetricCard
           label="PGBL em folha"
           value={formatBRL(totalPgbl)}
@@ -911,9 +1036,6 @@ function ExtraIncomeTable({
     proLabore: "Pró-labore",
     services: "Serviços PF",
   } as const;
-  const carneByMonth = new Map(
-    projection.carneLeao.map((item) => [item.month, item.taxDue]),
-  );
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-3">
@@ -927,7 +1049,7 @@ function ExtraIncomeTable({
         <MetricCard
           label="Carnê-Leão projetado"
           value={formatBRL(projection.totalCarneLeao)}
-          helper="Recebimentos de pessoa física ou exterior"
+          helper={`Pago informado: ${formatBRL(projection.totalCarneLeaoPaid)} · lançamentos anuais não entram no cálculo mensal`}
           icon={Calculator}
           tone="amber"
         />
@@ -978,7 +1100,7 @@ function ExtraIncomeTable({
                   <th>Bruto</th>
                   <th>Despesas</th>
                   <th>IRRF</th>
-                  <th>Carnê-Leão do mês</th>
+                  <th>Carnê-Leão pago</th>
                   <th className="text-right">Ações</th>
                 </tr>
               </thead>
@@ -986,7 +1108,11 @@ function ExtraIncomeTable({
                 {state.extraIncome.map((entry, index) => (
                   <tr key={entry.id}>
                     <td>
-                      <strong>{monthLabel(entry.month)}</strong>
+                      <strong>
+                        {entry.entryMode === "annual"
+                          ? "Total anual"
+                          : monthLabel(entry.month)}
+                      </strong>
                     </td>
                     <td>
                       {typeLabel[entry.type]}
@@ -1010,7 +1136,9 @@ function ExtraIncomeTable({
                       }
                     >
                       {entry.payerType !== "legalEntity"
-                        ? formatBRL(carneByMonth.get(entry.month) ?? 0)
+                        ? formatBRL(
+                            entry.carneLeaoPaid ? entry.carneLeaoPaidAmount : 0,
+                          )
                         : "Não aplicável"}
                     </td>
                     <td className="text-right">
@@ -1037,6 +1165,37 @@ function ExtraIncomeTable({
             </table>
           </div>
         )}
+      </Card>
+      <Card className="overflow-hidden">
+        <div className="section-heading">
+          <h2>Carnê-Leão consolidado por mês</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table min-w-[650px]">
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th>Rendimento tributável</th>
+                <th>Base</th>
+                <th>Devido</th>
+                <th>Pago informado</th>
+                <th>Sem recolhimento informado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projection.carneLeao.map((m) => (
+                <tr key={m.month}>
+                  <td>{monthLabel(m.month)}</td>
+                  <td>{formatBRL(m.gross)}</td>
+                  <td>{formatBRL(m.taxableBase)}</td>
+                  <td>{formatBRL(m.taxDue)}</td>
+                  <td>{formatBRL(m.taxPaid)}</td>
+                  <td>{formatBRL(Math.max(0, m.taxDue - m.taxPaid))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );
@@ -1153,7 +1312,6 @@ function DataView({
   setState,
   projection,
   section,
-  setSection,
   onEditMonth,
   vacationActions,
   incomeActions,
@@ -1163,7 +1321,6 @@ function DataView({
   setState: React.Dispatch<React.SetStateAction<TaxState>>;
   projection: Projection;
   section: DataSection;
-  setSection: (section: DataSection) => void;
   onEditMonth: (index: number) => void;
   vacationActions: {
     add: () => void;
@@ -1183,7 +1340,6 @@ function DataView({
 }) {
   return (
     <div className="space-y-5">
-      <DataTabs section={section} onChange={setSection} />
       {section === "holerites" && (
         <PayrollTable projection={projection} onEditMonth={onEditMonth} />
       )}
@@ -1231,7 +1387,7 @@ function DataView({
   );
 }
 
-function OptimizerView({
+function DeductionsView({
   state,
   setState,
   projection,
@@ -1240,63 +1396,24 @@ function OptimizerView({
   setState: React.Dispatch<React.SetStateAction<TaxState>>;
   projection: Projection;
 }) {
-  const opportunity = useMemo(() => calculatePgblOpportunity(state), [state]);
   const setDeduction = (key: keyof TaxState["deductions"], value: number) =>
     setState((current) => ({
       ...current,
       deductions: { ...current.deductions, [key]: value },
     }));
-  const educationUsed =
-    Math.min(
-      state.deductions.holderEducation,
-      TAX_RULES_2026.educationAnnualPerBeneficiary,
-    ) +
-    state.dependents.reduce(
-      (sum, item) =>
-        sum +
-        Math.min(item.education, TAX_RULES_2026.educationAnnualPerBeneficiary),
-      0,
-    );
-  const medical =
-    state.deductions.medical +
-    state.dependents.reduce((sum, item) => sum + item.medical, 0);
-  const audits = [
-    {
-      label: "INSS oficial",
-      value: projection.annualInss,
-      note: "Integralmente dedutível",
-    },
-    {
-      label: "Dependentes",
-      value: state.dependents.length * TAX_RULES_2026.dependentAnnual,
-      note: `${state.dependents.length} cadastrado(s)`,
-    },
-    {
-      label: "Saúde",
-      value: medical,
-      note: "Sem teto legal, com comprovantes",
-    },
-    {
-      label: "Educação",
-      value: educationUsed,
-      note: `Teto de ${formatBRL(TAX_RULES_2026.educationAnnualPerBeneficiary)} por pessoa`,
-    },
-    {
-      label: "Pensão judicial",
-      value:
-        state.deductions.judicialPension +
-        state.months.reduce((sum, item) => sum + item.pension, 0),
-      note: "Decisão judicial ou escritura",
-    },
-    {
-      label: "PGBL dedutível",
-      value: projection.pgbl.deductible,
-      note: "Limitado a 12% da renda",
-    },
-  ];
+  const dependentsTotal = state.dependents.reduce(
+    (total, d) =>
+      total +
+      TAX_RULES_2026.dependentAnnual +
+      Math.min(d.education, TAX_RULES_2026.educationAnnualPerBeneficiary) +
+      d.medical,
+    0,
+  );
+  const holder = projection.complete.deductions - dependentsTotal;
   return (
-    <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+    <div className="deductions-layout">
+      <div className="space-y-5">
+        {" "}
         <Card className="p-6">
           <p className="section-kicker">Auditoria de deduções</p>
           <h2 className="mt-1 font-semibold text-white">
@@ -1326,26 +1443,160 @@ function OptimizerView({
             />
           </div>
         </Card>
-        <Card className="overflow-hidden">
-          <div className="section-heading">
-            <div>
-              <p className="section-kicker">Checklist calculado</p>
-              <h2>Composição do modelo completo</h2>
-            </div>
-          </div>
-          <div className="audit-list">
-            {audits.map((item) => (
-              <div key={item.label}>
-                <span>
-                  <Check />
-                  {item.label}
-                  <small>{item.note}</small>
-                </span>
-                <strong>{formatBRL(item.value)}</strong>
-              </div>
-            ))}
-          </div>
+        <Card className="p-5 text-sm text-slate-400 space-y-2">
+          <h2>Auditoria de deduções</h2>
+          <p>Saúde: apenas valores elegíveis, líquidos de reembolso.</p>
+          <p>
+            Educação: teto individual de{" "}
+            {formatBRL(TAX_RULES_2026.educationAnnualPerBeneficiary)}.
+          </p>
+          <p>O INSS do 13º não é repetido no ajuste anual.</p>
+          <p>
+            Pensão e outras deduções anuais: informe somente valores adicionais
+            aos holerites.
+          </p>
         </Card>
+      </div>
+      <Card className="overflow-hidden">
+        <div className="section-heading">
+          <h2>Composição do modelo completo</h2>
+        </div>
+        <div className="audit-list">
+          <h3>Deduções do titular</h3>
+          {[
+            ["INSS sujeito ao ajuste anual", projection.deductibleInss],
+            ["Saúde", state.deductions.medical],
+            [
+              "Educação (limitada)",
+              Math.min(
+                state.deductions.holderEducation,
+                TAX_RULES_2026.educationAnnualPerBeneficiary,
+              ),
+            ],
+            ["PGBL próprio (limitado)", projection.pgbl.deductible],
+            [
+              "Pensão judicial (folha + adicional)",
+              state.deductions.judicialPension +
+                state.months.reduce((n, m) => n + m.pension, 0),
+            ],
+            [
+              "Outras deduções + Livro Caixa admitido",
+              holder -
+                projection.deductibleInss -
+                state.deductions.medical -
+                Math.min(
+                  state.deductions.holderEducation,
+                  TAX_RULES_2026.educationAnnualPerBeneficiary,
+                ) -
+                projection.pgbl.deductible -
+                state.deductions.judicialPension -
+                state.months.reduce((n, m) => n + m.pension, 0),
+            ],
+          ].map(([label, value]) => (
+            <div key={String(label)}>
+              <span>{label}</span>
+              <strong>{formatBRL(Number(value))}</strong>
+            </div>
+          ))}
+          <div>
+            <span>Subtotal do titular</span>
+            <strong>{formatBRL(holder)}</strong>
+          </div>
+          <h3>Deduções por dependente</h3>
+          {state.dependents.length === 0 && (
+            <p className="text-sm text-slate-400">
+              Nenhum dependente cadastrado.
+            </p>
+          )}
+          {state.dependents.map((d, i) => (
+            <section className="dependent-breakdown" key={d.id}>
+              <h4>{d.name || `Dependente ${i + 1}`}</h4>
+              <dl>
+                <div>
+                  <dt>Dedução fixa</dt>
+                  <dd>{formatBRL(TAX_RULES_2026.dependentAnnual)}</dd>
+                </div>
+                <div>
+                  <dt>Saúde</dt>
+                  <dd>{formatBRL(d.medical)}</dd>
+                </div>
+                <div>
+                  <dt>Educação limitada</dt>
+                  <dd>
+                    {formatBRL(
+                      Math.min(
+                        d.education,
+                        TAX_RULES_2026.educationAnnualPerBeneficiary,
+                      ),
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Subtotal</dt>
+                  <dd>
+                    {formatBRL(
+                      TAX_RULES_2026.dependentAnnual +
+                        d.medical +
+                        Math.min(
+                          d.education,
+                          TAX_RULES_2026.educationAnnualPerBeneficiary,
+                        ),
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          ))}
+          <div className="text-emerald-300">
+            <span>Total consolidado de deduções</span>
+            <strong>{formatBRL(projection.complete.deductions)}</strong>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function OptimizerView({
+  state,
+  projection: currentProjection,
+}: {
+  state: TaxState;
+  projection: Projection;
+}) {
+  const [extra, setExtra] = useState(0);
+  const projection = useMemo(
+    () => calculateProjection(state, extra),
+    [state, extra],
+  );
+  const opportunity = useMemo(() => calculatePgblOpportunity(state), [state]);
+  return (
+    <div className="space-y-5">
+      <div className="notice-row">
+        <Info />
+        Simulação separada dos aportes já realizados: não altera seus dados.
+        Aportes reais são informados na seção Previdência.
+      </div>
+      <div className="result-ribbon">
+        <span>
+          Economia com o aporte simulado
+          <strong>
+            {formatBRL(
+              Math.max(
+                0,
+                currentProjection.recommended.taxDue -
+                  projection.recommended.taxDue,
+              ),
+            )}
+          </strong>
+        </span>
+        <span>
+          Saldo após simulação
+          <strong>
+            {formatBRL(Math.abs(projection.recommended.balance))} ·{" "}
+            {projection.recommended.balance >= 0 ? "a restituir" : "a pagar"}
+          </strong>
+        </span>
       </div>
       <div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
         <Card className="p-6 sm:p-8">
@@ -1366,7 +1617,7 @@ function OptimizerView({
           </div>
           <div className="mt-8">
             <div className="mb-3 flex justify-between text-sm">
-              <span className="text-slate-300">Aportes PGBL fora da folha</span>
+              <span className="text-slate-300">Aporte adicional simulado</span>
               <strong className="text-blue-300">
                 {formatPercent(
                   projection.pgbl.limit
@@ -1380,9 +1631,9 @@ function OptimizerView({
               type="number"
               min={0}
               step={100}
-              value={state.deductions.pgblDirect}
+              value={extra}
               onChange={(event) =>
-                setDeduction("pgblDirect", Number(event.target.value) || 0)
+                setExtra(Math.max(0, Number(event.target.value) || 0))
               }
               className="h-12 border-white/10 bg-[#0b1423] text-lg text-white"
             />
@@ -1392,13 +1643,8 @@ function OptimizerView({
               min={0}
               max={Math.max(1, Math.ceil(projection.pgbl.limit))}
               step={100}
-              value={Math.min(
-                state.deductions.pgblDirect,
-                projection.pgbl.limit,
-              )}
-              onChange={(event) =>
-                setDeduction("pgblDirect", Number(event.target.value))
-              }
+              value={Math.min(extra, projection.pgbl.limit)}
+              onChange={(event) => setExtra(Number(event.target.value))}
               className="pgbl-range mt-5 w-full"
             />
           </div>
@@ -1431,9 +1677,9 @@ function OptimizerView({
         <Card className="relative overflow-hidden p-6">
           <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl" />
           <div className="relative">
-            <p className="section-kicker">Cenário recomendado</p>
+            <p className="section-kicker">Cenário-limite</p>
             <h2 className="mt-1 font-semibold text-white">
-              Usar toda a margem disponível
+              Se utilizar toda a margem disponível
             </h2>
             <div className="mt-6 space-y-4">
               <div className="scenario-row">
@@ -1453,15 +1699,17 @@ function OptimizerView({
                 </strong>
               </div>
               <div className="scenario-row border-t border-white/8 pt-4">
-                <span>Ganho no saldo</span>
+                <span>Economia vs. melhor modelo atual</span>
                 <strong className="text-emerald-300">
                   + {formatBRL(opportunity.balanceGain)}
                 </strong>
               </div>
             </div>
             <div className="mt-6 rounded-xl border border-blue-400/20 bg-blue-500/[.06] p-4 text-xs leading-5 text-slate-300">
-              PGBL é dedutível; VGBL não. A simulação presume opção pelo modelo
-              completo e contribuição à previdência oficial.
+              O benefício é diferimento tributário, não rentabilidade garantida.
+              Avalie custos, liquidez e tributação no resgate. A dedução exige
+              elegibilidade e contribuição à previdência oficial; aportes da
+              empresa não são dedução pessoal.
             </div>
           </div>
         </Card>
@@ -1483,11 +1731,11 @@ function DeclarationCard({
       className={cn(
         "relative overflow-hidden p-6",
         recommended &&
-          "border-blue-400/40 shadow-[0_0_0_1px_rgb(79_140_255/12%),0_22px_60px_rgb(0_0_0/22%)]",
+          "border-emerald-400/40 shadow-[0_0_0_1px_rgb(79_140_255/12%),0_22px_60px_rgb(0_0_0/22%)]",
       )}
     >
       {recommended && (
-        <span className="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-blue-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">
+        <span className="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white">
           <Check className="size-3" />
           Mais vantajosa
         </span>
@@ -1524,7 +1772,7 @@ function DeclarationCard({
           <dd>{formatBRL(result.prepaidTax)}</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-slate-400">Tributação exclusiva</dt>
+          <dt className="text-slate-400">Exclusivo (fora do ajuste)</dt>
           <dd>{formatBRL(result.exclusiveTax)}</dd>
         </div>
       </dl>
@@ -1604,15 +1852,7 @@ function ComparisonView({ projection }: { projection: Projection }) {
   );
 }
 
-function DashboardView({
-  projection,
-  onNavigate,
-  onEditMonth,
-}: {
-  projection: Projection;
-  onNavigate: (view: View) => void;
-  onEditMonth: (index: number) => void;
-}) {
+function DashboardView({ projection }: { projection: Projection }) {
   const balance = projection.recommended.balance;
   const actualCount = projection.months.filter(
     (month) => month.status === "actual",
@@ -1637,7 +1877,7 @@ function DashboardView({
         <MetricCard
           label="INSS pago no ano"
           value={formatBRL(projection.annualInss, true)}
-          helper="Folha, férias e rendas extras informadas"
+          helper="Folha, férias, 13º e rendas extras informadas"
           icon={ShieldCheck}
           tone="slate"
         />
@@ -1653,7 +1893,7 @@ function DashboardView({
           value={formatBRL(projection.totalWithheld, true)}
           helper={
             projection.totalCarneLeao > 0
-              ? `+ ${formatBRL(projection.totalCarneLeao)} de Carnê-Leão`
+              ? `+ ${formatBRL(projection.totalCarneLeaoPaid)} de Carnê-Leão pago`
               : "Retenções mensais e exclusivas"
           }
           icon={ReceiptText}
@@ -1703,65 +1943,9 @@ function DashboardView({
               )}
               className="mt-6 bg-slate-800 [&>div]:bg-blue-400"
             />
-            <Button
-              onClick={() => onNavigate("otimizacao")}
-              className="mt-6 w-full bg-blue-500 text-white hover:bg-blue-400"
-            >
-              Abrir otimização <ArrowRight />
-            </Button>
           </div>
         </Card>
       </div>
-      <Card className="overflow-hidden">
-        <div className="section-heading">
-          <div>
-            <p className="section-kicker">Fechamento por competência</p>
-            <h2>Últimos meses do ano</h2>
-          </div>
-          <button className="link-button" onClick={() => onNavigate("dados")}>
-            Editar histórico <ChevronRight />
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="data-table min-w-[720px]">
-            <thead>
-              <tr>
-                <th>Mês</th>
-                <th>Status</th>
-                <th>Renda tributável</th>
-                <th>INSS</th>
-                <th>IRRF</th>
-                <th>Líquido</th>
-                <th className="text-right">Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projection.months.slice(6).map((month) => (
-                <tr key={month.id}>
-                  <td>
-                    <strong>{monthLabel(month.month)}</strong>
-                  </td>
-                  <td>
-                    <StatusBadge status={month.status} />
-                  </td>
-                  <td>{formatBRL(month.grossTaxable)}</td>
-                  <td>{formatBRL(month.inssUsed)}</td>
-                  <td>{formatBRL(month.irrfUsed)}</td>
-                  <td>{formatBRL(month.netIncome)}</td>
-                  <td className="text-right">
-                    <button
-                      onClick={() => onEditMonth(month.month)}
-                      className="icon-button"
-                    >
-                      <Pencil />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </div>
   );
 }
@@ -1801,18 +1985,26 @@ function EmptyState({
 function InlineMoney({
   value,
   onChange,
+  disabled = false,
+  label,
 }: {
   value: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
+  label: string;
 }) {
   return (
     <Input
+      aria-label={label}
+      disabled={disabled}
       className="inline-money"
       type="number"
       min={0}
       step="0.01"
       value={value}
-      onChange={(event) => onChange(Number(event.target.value) || 0)}
+      onChange={(event) =>
+        onChange(Math.max(0, Number(event.target.value) || 0))
+      }
     />
   );
 }
@@ -1822,41 +2014,53 @@ const payrollFields: Array<{
     | "salary"
     | "overtime"
     | "commission"
-    | "bonus"
     | "otherTaxable"
     | "nonTaxable"
     | "pension"
     | "otherLegalDeductions"
-    | "pgblPayroll"
-    | "vgblPayroll";
+    | "nonDeductiblePayroll";
   label: string;
 }> = [
   { key: "salary", label: "Salário base" },
   { key: "overtime", label: "Horas extras" },
-  { key: "commission", label: "Comissões" },
-  { key: "bonus", label: "Bônus" },
+  { key: "commission", label: "Bônus e comissões" },
   { key: "otherTaxable", label: "Outros tributáveis" },
   { key: "nonTaxable", label: "Rendimentos isentos" },
   { key: "pension", label: "Pensão judicial" },
   { key: "otherLegalDeductions", label: "Outras deduções em folha" },
-  { key: "pgblPayroll", label: "PGBL em folha" },
-  { key: "vgblPayroll", label: "VGBL em folha" },
+  { key: "nonDeductiblePayroll", label: "Descontos não dedutíveis na folha" },
 ];
 
 function MonthDialog({
   open,
   month,
-  result,
+  state,
   onClose,
   onSave,
 }: {
   open: boolean;
   month: PayrollMonth | null;
-  result: Projection["months"][number] | null;
+  state: TaxState;
   onClose: () => void;
   onSave: (month: PayrollMonth) => void;
 }) {
-  const [draft, setDraft] = useState<PayrollMonth | null>(month);
+  const [draft, setDraft] = useState<PayrollMonth | null>(
+    month
+      ? { ...month, commission: month.commission + month.bonus, bonus: 0 }
+      : null,
+  );
+  const result = useMemo(
+    () =>
+      draft
+        ? calculateProjection({
+            ...state,
+            months: state.months.map((m) =>
+              m.month === draft.month ? draft : m,
+            ),
+          }).months[draft.month]
+        : null,
+    [state, draft],
+  );
   if (!draft) return null;
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
@@ -1908,49 +2112,78 @@ function MonthDialog({
               onChange={(event) =>
                 setDraft({
                   ...draft,
-                  dependents: Number(event.target.value) || 0,
+                  dependents: Math.max(
+                    0,
+                    Math.floor(Number(event.target.value) || 0),
+                  ),
                 })
               }
             />
           </label>
-          {payrollFields.map((field) => (
-            <MoneyInput
-              key={field.key}
-              label={field.label}
-              value={draft[field.key]}
-              onChange={(value) => setDraft({ ...draft, [field.key]: value })}
-            />
-          ))}
-          <MoneyInput
-            label="INSS efetivo"
-            value={draft.actualInss ?? 0}
-            onChange={(value) =>
-              setDraft({ ...draft, actualInss: value || null })
-            }
-          />
         </div>
-        <div className="override-box">
-          <Toggle
-            checked={draft.irrfOverrideEnabled}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                irrfOverrideEnabled: value,
-                actualIrrf: value
-                  ? (draft.actualIrrf ?? result?.irrfCalculated ?? 0)
-                  : null,
-              })
-            }
-            label="Sobrescrever o IRRF calculado"
-          />
-          {draft.irrfOverrideEnabled && (
-            <MoneyInput
-              label="IRRF exato do contracheque"
-              value={draft.actualIrrf ?? 0}
-              onChange={(value) => setDraft({ ...draft, actualIrrf: value })}
-            />
-          )}
-        </div>
+        {["Proventos", "Descontos"].map((group, i) => (
+          <fieldset className="editor-fieldset" key={group}>
+            <legend>{group}</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {payrollFields
+                .filter(
+                  (f) =>
+                    [
+                      "pension",
+                      "otherLegalDeductions",
+                      "nonDeductiblePayroll",
+                    ].includes(f.key) ===
+                    (i === 1),
+                )
+                .map((field) => (
+                  <MoneyInput
+                    key={field.key}
+                    label={field.label}
+                    value={draft[field.key]}
+                    onChange={(value) =>
+                      setDraft({ ...draft, [field.key]: value })
+                    }
+                    helper={
+                      field.key === "nonDeductiblePayroll"
+                        ? "Plano de saúde, coparticipação, odontologia, empréstimos: afetam apenas o líquido. Despesas médicas elegíveis são lançadas separadamente em Deduções."
+                        : undefined
+                    }
+                  />
+                ))}
+            </div>
+          </fieldset>
+        ))}
+        <OverrideInput
+          label="INSS do holerite"
+          enabled={draft.inssOverrideEnabled}
+          value={draft.actualInss}
+          calculated={result?.inssCalculated ?? 0}
+          onToggle={(v) =>
+            setDraft({
+              ...draft,
+              inssOverrideEnabled: v,
+              actualInss: draft.actualInss ?? result?.inssCalculated ?? 0,
+            })
+          }
+          onChange={(v) => setDraft({ ...draft, actualInss: v })}
+        />
+        <OverrideInput
+          label="IRRF do holerite"
+          enabled={draft.irrfOverrideEnabled}
+          value={draft.actualIrrf}
+          calculated={result?.irrfCalculated ?? 0}
+          onToggle={(v) =>
+            setDraft({
+              ...draft,
+              irrfOverrideEnabled: v,
+              actualIrrf: draft.actualIrrf ?? result?.irrfCalculated ?? 0,
+            })
+          }
+          onChange={(v) => setDraft({ ...draft, actualIrrf: v })}
+        />
+        <p className="text-sm text-slate-400">
+          PGBL e VGBL são configurados exclusivamente em Previdência.
+        </p>
         <DialogFooter className="mt-3">
           <Button
             variant="outline"
@@ -1975,15 +2208,27 @@ function MonthDialog({
 function VacationDialog({
   open,
   event,
+  state,
   onClose,
   onSave,
 }: {
   open: boolean;
   event: VacationEvent | null;
+  state: TaxState;
   onClose: () => void;
   onSave: (event: VacationEvent) => void;
 }) {
   const [draft, setDraft] = useState<VacationEvent | null>(event);
+  const preview = useMemo(() => {
+    if (!draft) return null;
+    const exists = state.vacations.some((e) => e.id === draft.id);
+    const vacations = exists
+      ? state.vacations.map((e) => (e.id === draft.id ? draft : e))
+      : [...state.vacations, draft];
+    return calculateProjection({ ...state, vacations }).vacations.find(
+      (e) => e.id === draft.id,
+    )!;
+  }, [state, draft]);
   if (!draft) return null;
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
@@ -2016,14 +2261,14 @@ function VacationDialog({
             label="Dias gozados"
             value={draft.daysTaken}
             onChange={(value) =>
-              setDraft({ ...draft, daysTaken: Math.min(30, value) })
+              setDraft({ ...draft, daysTaken: Math.min(30, Math.floor(value)) })
             }
           />
           <MoneyInput
             label="Dias vendidos"
             value={draft.daysSold}
             onChange={(value) =>
-              setDraft({ ...draft, daysSold: Math.min(10, value) })
+              setDraft({ ...draft, daysSold: Math.min(10, Math.floor(value)) })
             }
           />
           <MoneyInput
@@ -2036,13 +2281,6 @@ function VacationDialog({
             value={draft.abonoAverage}
             onChange={(value) => setDraft({ ...draft, abonoAverage: value })}
           />
-          <MoneyInput
-            label="INSS efetivo das férias"
-            value={draft.actualInss ?? 0}
-            onChange={(value) =>
-              setDraft({ ...draft, actualInss: value || null })
-            }
-          />
         </div>
         <div className="override-box">
           <Toggle
@@ -2050,25 +2288,52 @@ function VacationDialog({
             onChange={(value) => setDraft({ ...draft, receivedAdvance: value })}
             label="Recebeu adiantamento de férias"
           />
-          <Toggle
-            checked={draft.irrfOverrideEnabled}
-            onChange={(value) =>
-              setDraft({
-                ...draft,
-                irrfOverrideEnabled: value,
-                actualIrrf: value ? (draft.actualIrrf ?? 0) : null,
-              })
-            }
-            label="Sobrescrever IRRF das férias"
-          />
-          {draft.irrfOverrideEnabled && (
-            <MoneyInput
-              label="IRRF exato das férias"
-              value={draft.actualIrrf ?? 0}
-              onChange={(value) => setDraft({ ...draft, actualIrrf: value })}
-            />
-          )}
         </div>
+        <OverrideInput
+          label="INSS das férias"
+          enabled={draft.inssOverrideEnabled}
+          value={draft.actualInss}
+          calculated={preview?.inssCalculated ?? 0}
+          onToggle={(value) =>
+            setDraft({
+              ...draft,
+              inssOverrideEnabled: value,
+              actualInss: draft.actualInss ?? preview?.inssCalculated ?? 0,
+            })
+          }
+          onChange={(value) => setDraft({ ...draft, actualInss: value })}
+        />
+        <OverrideInput
+          label="IRRF das férias"
+          enabled={draft.irrfOverrideEnabled}
+          value={draft.actualIrrf}
+          calculated={preview?.irrfCalculated ?? 0}
+          onToggle={(value) =>
+            setDraft({
+              ...draft,
+              irrfOverrideEnabled: value,
+              actualIrrf: draft.actualIrrf ?? preview?.irrfCalculated ?? 0,
+            })
+          }
+          onChange={(value) => setDraft({ ...draft, actualIrrf: value })}
+        />
+        <div className="result-ribbon">
+          <span>
+            Férias tributáveis
+            <strong>{formatBRL(preview?.taxableGross ?? 0)}</strong>
+          </span>
+          <span>
+            Abono isento<strong>{formatBRL(preview?.exemptGross ?? 0)}</strong>
+          </span>
+          <span>
+            Líquido<strong>{formatBRL(preview?.netAdvance ?? 0)}</strong>
+          </span>
+        </div>
+        <p className="text-sm text-slate-400">
+          O INSS informado deve ser somente a parcela das férias, não o total do
+          holerite. O adiantamento liquida a mesma verba de férias, sem
+          descontar novamente o salário ordinário.
+        </p>
         <DialogFooter>
           <Button
             variant="outline"
@@ -2112,23 +2377,49 @@ function ExtraIncomeDialog({
             O tipo de pagador determina se há apuração mensal pelo Carnê-Leão.
           </DialogDescription>
         </DialogHeader>
+        <label className="field-label">
+          <span>Forma de lançamento</span>
+          <select
+            className="input-select"
+            value={draft.entryMode}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                entryMode: e.target.value as ExtraIncome["entryMode"],
+              })
+            }
+          >
+            <option value="monthly">Mensal · recebimento de um mês</option>
+            <option value="annual">Anual direto · total do ano</option>
+          </select>
+        </label>
+        {draft.entryMode === "annual" && (
+          <div className="notice-row">
+            <Info />
+            Informe os totais anuais, sem multiplicar por 12. Sem discriminar os
+            meses, só o ajuste anual é projetado; o Carnê-Leão mensal fica
+            pendente de apuração.
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="field-label">
-            <span>Mês do recebimento</span>
-            <select
-              value={draft.month}
-              onChange={(event) =>
-                setDraft({ ...draft, month: Number(event.target.value) })
-              }
-              className="input-select"
-            >
-              {Array.from({ length: 12 }, (_, month) => (
-                <option key={month} value={month}>
-                  {monthLabel(month)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {draft.entryMode === "monthly" && (
+            <label className="field-label">
+              <span>Mês do recebimento</span>
+              <select
+                value={draft.month}
+                onChange={(event) =>
+                  setDraft({ ...draft, month: Number(event.target.value) })
+                }
+                className="input-select"
+              >
+                {Array.from({ length: 12 }, (_, month) => (
+                  <option key={month} value={month}>
+                    {monthLabel(month)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="field-label">
             <span>Tipo de renda</span>
             <select
@@ -2179,28 +2470,61 @@ function ExtraIncomeDialog({
             onChange={(value) => setDraft({ ...draft, gross: value })}
           />
           <MoneyInput
-            label="Despesas dedutíveis vinculadas"
+            label={
+              draft.type === "rent"
+                ? "Encargos excluídos do aluguel"
+                : "Despesas de Livro Caixa"
+            }
             value={draft.deductibleExpenses}
             onChange={(value) =>
               setDraft({ ...draft, deductibleExpenses: value })
             }
-            helper="Informe somente despesas legalmente admitidas e comprovadas."
+            helper={
+              draft.type === "rent"
+                ? "Aluguel: condomínio, IPTU e taxa de administração quando o ônus é do locador, com comprovantes. Reparos e parcelas de financiamento não são exclusões automáticas."
+                : draft.type === "services"
+                  ? "Serviços: despesas necessárias, escrituradas em Livro Caixa. O limite mensal e o excedente são transportados até dezembro. Valores anuais exigem conferência do livro."
+                  : "Pró-labore: não admite despesas genéricas de Livro Caixa; use INSS efetivamente recolhido."
+            }
           />
           <MoneyInput
             label="INSS recolhido"
             value={draft.inss}
             onChange={(value) => setDraft({ ...draft, inss: value })}
           />
-          <MoneyInput
-            label="IRRF já retido"
-            value={draft.withheldIrrf}
-            onChange={(value) => setDraft({ ...draft, withheldIrrf: value })}
-          />
+          {draft.payerType === "legalEntity" && (
+            <MoneyInput
+              label="IRRF já retido"
+              value={draft.withheldIrrf}
+              onChange={(value) => setDraft({ ...draft, withheldIrrf: value })}
+            />
+          )}
         </div>
         {draft.payerType !== "legalEntity" && (
-          <div className="notice-row">
-            <Calculator />
-            Esta renda entrará na calculadora mensal do Carnê-Leão.
+          <div className="space-y-4">
+            <Toggle
+              label="Carnê-Leão foi pago mensalmente?"
+              checked={draft.carneLeaoPaid}
+              onChange={(v) => setDraft({ ...draft, carneLeaoPaid: v })}
+            />
+            {draft.carneLeaoPaid && (
+              <MoneyInput
+                label={
+                  draft.entryMode === "annual"
+                    ? "Principal efetivamente pago no ano"
+                    : "Principal efetivamente pago neste lançamento"
+                }
+                value={draft.carneLeaoPaidAmount}
+                onChange={(v) => setDraft({ ...draft, carneLeaoPaidAmount: v })}
+                helper="Não inclua multa ou juros. Se houver várias rendas no mesmo mês, registre cada DARF uma única vez."
+              />
+            )}
+            <div className="notice-row">
+              <Info />
+              Não pagar o Carnê-Leão não muda a renda tributável. Muda o crédito
+              de imposto pago no ajuste anual. Pendências podem gerar multa e
+              juros; confira os vencimentos e regularize no Sicalc.
+            </div>
           </div>
         )}
         <DialogFooter>
@@ -2276,7 +2600,6 @@ function DependentDialog({
               setDraft({
                 ...draft,
                 hasTaxableIncome: value,
-                taxableIncome: value ? draft.taxableIncome : 0,
               })
             }
             label="Possui renda tributável"
@@ -2312,9 +2635,12 @@ function DependentDialog({
 
 export function TaxApp() {
   const [state, setState] = useState<TaxState>(createInitialState);
-  const [view, setView] = useState<View>(() => parseHash());
+  const [view, setView] = useState<View>("dashboard");
   const [dataSection, setDataSection] = useState<DataSection>("holerites");
   const [hydrated, setHydrated] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("Carregando");
+  const [savedState, setSavedState] = useState<TaxState | null>(null);
+  const [storageError, setStorageError] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [editingMonth, setEditingMonth] = useState<number | null>(null);
   const [editingVacation, setEditingVacation] = useState<number | "new" | null>(
@@ -2333,13 +2659,26 @@ export function TaxApp() {
     latestState.current = state;
   }, [state]);
   useEffect(() => {
-    const onHistoryChange = () => setView(parseHash());
+    const onHistoryChange = () => {
+      setView(parseHash());
+      const hash = window.location.hash.slice(1);
+      if (dataSections.some((item) => item.id === hash))
+        setDataSection(hash as DataSection);
+    };
+    onHistoryChange();
     window.addEventListener("hashchange", onHistoryChange);
     window.addEventListener("popstate", onHistoryChange);
-    loadTaxState().then((saved) => {
-      if (saved) setState(migrateTaxState(saved));
-      setHydrated(true);
-    });
+    loadTaxState()
+      .then((saved) => {
+        if (saved) setState(migrateTaxState(saved));
+        setHydrated(true);
+      })
+      .catch(() => {
+        setStorageError(
+          "Não foi possível carregar o plano local. O salvamento está suspenso para preservar seus dados. Reabra o site ou exporte os valores antes de sair.",
+        );
+        setSaveStatus("Falha ao carregar");
+      });
     return () => {
       window.removeEventListener("hashchange", onHistoryChange);
       window.removeEventListener("popstate", onHistoryChange);
@@ -2347,8 +2686,26 @@ export function TaxApp() {
   }, []);
   useEffect(() => {
     if (!hydrated) return;
-    const timer = window.setTimeout(() => void saveTaxState(state), 350);
-    return () => window.clearTimeout(timer);
+    let current = true;
+    void saveTaxState(state)
+      .then(() => {
+        if (current) {
+          setSaveStatus("Salvo localmente");
+          setSavedState(state);
+          setStorageError("");
+        }
+      })
+      .catch(() => {
+        if (current) {
+          setSaveStatus("Não salvo");
+          setStorageError(
+            "Não foi possível salvar neste navegador. Exporte os dados antes de sair.",
+          );
+        }
+      });
+    return () => {
+      current = false;
+    };
   }, [state, hydrated]);
   useEffect(() => {
     const context = document.modelContext;
@@ -2448,8 +2805,9 @@ export function TaxApp() {
     return () => lifecycle.abort();
   }, []);
 
-  const navigate = (next: View) => {
-    window.history.pushState(null, "", `#${next}`);
+  const navigate = (next: View, section?: DataSection) => {
+    if (section) setDataSection(section);
+    window.history.pushState(null, "", `#${section ?? next}`);
     setView(next);
     setMobileMenu(false);
   };
@@ -2532,14 +2890,21 @@ export function TaxApp() {
     const href = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = href;
-    anchor.download = "pondera-tax-2026-v1.1.json";
+    anchor.download = "pondera-tax-2026-v1.2.json";
     anchor.click();
     URL.revokeObjectURL(href);
   };
 
   return (
     <div className="min-h-screen">
-      <aside className="sidebar-shell">
+      {mobileMenu && (
+        <button
+          className="sidebar-backdrop"
+          aria-label="Fechar menu"
+          onClick={() => setMobileMenu(false)}
+        />
+      )}
+      <aside className={cn("sidebar-shell", mobileMenu && "sidebar-open")}>
         <div className="flex items-center gap-3 px-2">
           <span className="brand-mark">
             <span>P</span>
@@ -2551,19 +2916,51 @@ export function TaxApp() {
             </span>
           </div>
         </div>
-        <nav className="mt-10 space-y-1">
-          {navigation.map((item) => {
+        <nav className="sidebar-navigation" aria-label="Navegação principal">
+          <p className="nav-group-label">DADOS DO ANO</p>
+          {dataSections.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate("dados", item.id)}
+                aria-current={
+                  view === "dados" && dataSection === item.id
+                    ? "page"
+                    : undefined
+                }
+                className={cn(
+                  "nav-item",
+                  view === "dados" &&
+                    dataSection === item.id &&
+                    "nav-item-active",
+                )}
+              >
+                <Icon />
+                {item.label}
+              </button>
+            );
+          })}
+          <p className="nav-group-label">ANÁLISE TRIBUTÁRIA</p>
+          {[
+            "deducoes",
+            "otimizacao",
+            "comparativo",
+            "dashboard",
+            "tabelas",
+          ].map((id) => {
+            const item = navigation.find((item) => item.id === id)!;
             const Icon = item.icon;
             return (
               <button
                 key={item.id}
                 onClick={() => navigate(item.id)}
+                aria-current={view === item.id ? "page" : undefined}
                 className={cn(
                   "nav-item",
                   view === item.id && "nav-item-active",
                 )}
               >
-                <span className="nav-step">{item.step}</span>
                 <Icon />
                 {item.label}
               </button>
@@ -2604,7 +3001,7 @@ export function TaxApp() {
                 hydrated ? "bg-emerald-400" : "bg-amber-400",
               )}
             />
-            {hydrated ? "Salvo localmente" : "Carregando"}
+            {saveStatus === "Salvo localmente" && savedState !== state ? "Salvando…" : saveStatus}
           </span>
           <Button
             variant="outline"
@@ -2617,27 +3014,38 @@ export function TaxApp() {
           </Button>
         </div>
       </header>
-      {mobileMenu && (
-        <div className="mobile-menu">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => navigate(item.id)}
-                className={cn(
-                  "nav-item",
-                  view === item.id && "nav-item-active",
-                )}
-              >
-                <Icon />
-                {item.label}
-              </button>
-            );
-          })}
+      <main className="pb-10 lg:ml-[236px]">
+        <div className="sticky-kpis" aria-label="Resumo tributário">
+          <div>
+            <span>Renda bruta total</span>
+            <strong>{formatBRL(projection.totalGrossIncome)}</strong>
+          </div>
+          {[projection.simplified, projection.complete].map((result) => (
+            <div
+              key={result.model}
+              className={cn(
+                "kpi-model",
+                result.taxDue === projection.recommended.taxDue &&
+                  "kpi-optimal",
+              )}
+            >
+              <span>
+                {result.model === "complete" ? "Completa" : "Simplificada"}
+                {result.taxDue === projection.recommended.taxDue
+                  ? " · melhor resultado"
+                  : ""}
+              </span>
+              <strong>{formatBRL(Math.abs(result.balance))}</strong>
+              <small>
+                {result.balance === 0
+                  ? "Sem saldo"
+                  : result.balance > 0
+                    ? "A restituir"
+                    : "A pagar"}
+              </small>
+            </div>
+          ))}
         </div>
-      )}
-      <main className="pb-28 lg:ml-[236px] lg:pb-10">
         <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -2650,17 +3058,15 @@ export function TaxApp() {
               </p>
             </div>
             <span className="rounded-full border border-white/8 bg-white/[.025] px-3 py-1.5 text-[11px] text-slate-400">
-              Versão 1.1.0
+              Versão 1.2.0
             </span>
           </div>
-          <StepStrip view={view} onNavigate={navigate} />
           {view === "dados" && (
             <DataView
               state={state}
               setState={setState}
               projection={projection}
               section={dataSection}
-              setSection={setDataSection}
               onEditMonth={setEditingMonth}
               vacationActions={{
                 add: () => setEditingVacation("new"),
@@ -2697,23 +3103,30 @@ export function TaxApp() {
               }}
             />
           )}
-          {view === "otimizacao" && (
-            <OptimizerView
+          {view === "tabelas" && <TaxReference />}
+          {view === "deducoes" && (
+            <DeductionsView
               state={state}
               setState={setState}
               projection={projection}
             />
           )}
-          {view === "comparativo" && <ComparisonView projection={projection} />}
-          {view === "dashboard" && (
-            <DashboardView
-              projection={projection}
-              onNavigate={navigate}
-              onEditMonth={(index) => {
-                setEditingMonth(index);
-              }}
-            />
+          {view === "otimizacao" && (
+            <OptimizerView state={state} projection={projection} />
           )}
+          {view === "comparativo" && <ComparisonView projection={projection} />}
+          {view === "dashboard" && <DashboardView projection={projection} />}
+          {storageError && (
+            <div role="alert" className="notice-row mt-4">
+              {storageError}
+            </div>
+          )}
+          {projection.warnings.map((warning) => (
+            <div role="status" className="notice-row mt-4" key={warning}>
+              <Info />
+              {warning}
+            </div>
+          ))}
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-600">
             <span>
               Estimativa para planejamento. Confira os informes de rendimentos
@@ -2721,7 +3134,7 @@ export function TaxApp() {
             </span>
             <button
               onClick={() => {
-                if (window.confirm("Restaurar os dados de exemplo da V1.1?"))
+                if (window.confirm("Restaurar os dados de exemplo da V1.2?"))
                   setState(createInitialState());
               }}
               className="inline-flex items-center gap-1.5 hover:text-slate-400"
@@ -2732,45 +3145,31 @@ export function TaxApp() {
           </div>
         </div>
       </main>
-      <nav className="bottom-nav lg:hidden">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={() => navigate(item.id)}
-              className={cn(view === item.id && "active")}
-            >
-              <Icon />
-              <span>{item.short}</span>
-            </button>
-          );
-        })}
-      </nav>
       <MonthDialog
-        key={editingMonth ?? "closed"}
+        key={`month-${editingMonth ?? "closed"}`}
         open={editingMonth !== null}
         month={editingMonth === null ? null : state.months[editingMonth]}
-        result={editingMonth === null ? null : projection.months[editingMonth]}
+        state={state}
         onClose={() => setEditingMonth(null)}
         onSave={saveMonth}
       />
       <VacationDialog
-        key={editingVacation === null ? "closed" : editingVacation}
+        key={`vacation-${editingVacation ?? "closed"}`}
         open={editingVacation !== null}
         event={currentVacation}
+        state={state}
         onClose={() => setEditingVacation(null)}
         onSave={saveVacation}
       />
       <ExtraIncomeDialog
-        key={editingIncome === null ? "closed" : editingIncome}
+        key={`income-${editingIncome ?? "closed"}`}
         open={editingIncome !== null}
         entry={currentIncome}
         onClose={() => setEditingIncome(null)}
         onSave={saveIncome}
       />
       <DependentDialog
-        key={editingDependent === null ? "closed" : editingDependent}
+        key={`dependent-${editingDependent ?? "closed"}`}
         open={editingDependent !== null}
         dependent={currentDependent}
         onClose={() => setEditingDependent(null)}

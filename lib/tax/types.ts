@@ -18,6 +18,8 @@ export type PayrollMonth = {
   actualInss: number | null;
   actualIrrf: number | null;
   irrfOverrideEnabled: boolean;
+  inssOverrideEnabled: boolean;
+  nonDeductiblePayroll: number;
 };
 
 export type VacationEvent = {
@@ -31,6 +33,7 @@ export type VacationEvent = {
   actualInss: number | null;
   actualIrrf: number | null;
   irrfOverrideEnabled: boolean;
+  inssOverrideEnabled: boolean;
 };
 
 export type ExtraIncomeType = "rent" | "proLabore" | "services";
@@ -46,6 +49,9 @@ export type ExtraIncome = {
   deductibleExpenses: number;
   inss: number;
   withheldIrrf: number;
+  entryMode: "monthly" | "annual";
+  carneLeaoPaid: boolean;
+  carneLeaoPaidAmount: number;
 };
 
 export type Dependent = {
@@ -63,6 +69,10 @@ export type AnnualEvents = {
   thirteenthIrrf: number | null;
   plrGross: number;
   plrIrrf: number | null;
+  thirteenthGrossOverrideEnabled: boolean;
+  thirteenthInssOverrideEnabled: boolean;
+  thirteenthIrrfOverrideEnabled: boolean;
+  plrIrrfOverrideEnabled: boolean;
 };
 
 export type AnnualDeductions = {
@@ -74,7 +84,7 @@ export type AnnualDeductions = {
 };
 
 export type TaxState = {
-  version: 2;
+  version: 3;
   taxYear: 2026;
   exerciseYear: 2027;
   taxpayerName: string;
@@ -84,6 +94,12 @@ export type TaxState = {
   dependents: Dependent[];
   events: AnnualEvents;
   deductions: AnnualDeductions;
+  retirement: {
+    automatic: boolean;
+    pgblPercent: number;
+    vgblPercent: number;
+    employerMatchPercent: number;
+  };
 };
 
 export type MonthlyResult = PayrollMonth & {
@@ -98,6 +114,7 @@ export type MonthlyResult = PayrollMonth & {
   irrfCalculated: number;
   irrfUsed: number;
   vacationAdvanceDeduction: number;
+  vacationSettlementCredit: number;
   netIncome: number;
   fgts: number;
 };
@@ -124,6 +141,7 @@ export type CarneLeaoMonth = {
   deductions: number;
   taxableBase: number;
   taxDue: number;
+  taxPaid: number;
 };
 
 export type DeclarationResult = {
@@ -148,6 +166,18 @@ export type Projection = {
   recommended: DeclarationResult;
   totalGrossIncome: number;
   annualInss: number;
+  deductibleInss: number;
+  thirteenth: {
+    gross: number;
+    inss: number;
+    taxableBase: number;
+    irrfUsed: number;
+    firstInstallment: number;
+    secondInstallment: number;
+  };
+  employerMatch: number;
+  totalCarneLeaoPaid: number;
+  warnings: string[];
   totalFgts: number;
   totalWithheld: number;
   totalCarneLeao: number;

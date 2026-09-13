@@ -43,6 +43,8 @@ export const createBlankMonth = (month: number): PayrollMonth => ({
   actualInss: null,
   actualIrrf: null,
   irrfOverrideEnabled: false,
+  inssOverrideEnabled: false,
+  nonDeductiblePayroll: 0,
 });
 
 const randomId = (prefix: string) =>
@@ -59,6 +61,7 @@ export const createVacation = (month = 0): VacationEvent => ({
   actualInss: null,
   actualIrrf: null,
   irrfOverrideEnabled: false,
+  inssOverrideEnabled: false,
 });
 
 export const createExtraIncome = (month = 0): ExtraIncome => ({
@@ -71,6 +74,9 @@ export const createExtraIncome = (month = 0): ExtraIncome => ({
   deductibleExpenses: 0,
   inss: 0,
   withheldIrrf: 0,
+  entryMode: "monthly",
+  carneLeaoPaid: false,
+  carneLeaoPaidAmount: 0,
 });
 
 export const createDependent = (): Dependent => ({
@@ -83,7 +89,7 @@ export const createDependent = (): Dependent => ({
 });
 
 export const createInitialState = (): TaxState => ({
-  version: 2,
+  version: 3,
   taxYear: 2026,
   exerciseYear: 2027,
   taxpayerName: "Seu planejamento",
@@ -105,7 +111,17 @@ export const createInitialState = (): TaxState => ({
   ],
   extraIncome: [],
   dependents: [],
+  retirement: {
+    automatic: false,
+    pgblPercent: 0,
+    vgblPercent: 0,
+    employerMatchPercent: 100,
+  },
   events: {
+    thirteenthGrossOverrideEnabled: false,
+    thirteenthInssOverrideEnabled: false,
+    thirteenthIrrfOverrideEnabled: false,
+    plrIrrfOverrideEnabled: false,
     thirteenthGross: 13_402.83,
     thirteenthInss: 988.09,
     thirteenthIrrf: null,
@@ -128,6 +144,7 @@ type LegacyMonth = Partial<PayrollMonth> & {
 
 type LegacyState = {
   version?: number;
+  retirement?: TaxState["retirement"];
   taxpayerName?: string;
   dependents?: number | Dependent[];
   months?: LegacyMonth[];
@@ -144,20 +161,51 @@ export function migrateTaxState(value: unknown): TaxState {
   const incoming = value as LegacyState;
   const base = createInitialState();
 
-  if (incoming.version === 2) {
+  if (incoming.version === 2 || incoming.version === 3) {
     return {
       ...base,
       ...incoming,
-      version: 2,
+      version: 3,
       months: base.months.map((fallback, index) => ({
         ...fallback,
         ...(incoming.months?.[index] ?? {}),
         month: index,
+        commission:
+          (incoming.months?.[index]?.commission ?? fallback.commission) +
+          (incoming.months?.[index]?.bonus ?? fallback.bonus),
+        bonus: 0,
+        inssOverrideEnabled:
+          incoming.months?.[index]?.inssOverrideEnabled ??
+          incoming.months?.[index]?.actualInss != null,
       })),
-      vacations: incoming.vacations ?? [],
-      extraIncome: incoming.extraIncome ?? [],
+      vacations: (incoming.vacations ?? []).map((event) => ({
+        ...createVacation(event.month),
+        ...event,
+        inssOverrideEnabled:
+          event.inssOverrideEnabled ?? event.actualInss != null,
+      })),
+      extraIncome: (incoming.extraIncome ?? []).map((entry) => ({
+        ...createExtraIncome(entry.month),
+        ...entry,
+      })),
+      retirement: { ...base.retirement, ...incoming.retirement },
       dependents: Array.isArray(incoming.dependents) ? incoming.dependents : [],
-      events: { ...base.events, ...(incoming.events ?? {}) },
+      events: {
+        ...base.events,
+        ...(incoming.events ?? {}),
+        thirteenthGrossOverrideEnabled:
+          incoming.events?.thirteenthGrossOverrideEnabled ??
+          incoming.events?.thirteenthGross != null,
+        thirteenthInssOverrideEnabled:
+          incoming.events?.thirteenthInssOverrideEnabled ??
+          incoming.events?.thirteenthInss != null,
+        thirteenthIrrfOverrideEnabled:
+          incoming.events?.thirteenthIrrfOverrideEnabled ??
+          incoming.events?.thirteenthIrrf != null,
+        plrIrrfOverrideEnabled:
+          incoming.events?.plrIrrfOverrideEnabled ??
+          incoming.events?.plrIrrf != null,
+      },
       deductions: { ...base.deductions, ...(incoming.deductions ?? {}) },
     };
   }
@@ -177,6 +225,11 @@ export function migrateTaxState(value: unknown): TaxState {
       ...payroll,
       month: index,
       vgblPayroll: 0,
+      commission:
+        (legacy.commission ?? fallback.commission) +
+        (legacy.bonus ?? fallback.bonus),
+      bonus: 0,
+      inssOverrideEnabled: legacy.actualInss != null,
       irrfOverrideEnabled:
         legacy.actualIrrf !== null && legacy.actualIrrf !== undefined,
     };
@@ -211,7 +264,22 @@ export function migrateTaxState(value: unknown): TaxState {
     months,
     vacations,
     dependents,
-    events: { ...base.events, ...(incoming.events ?? {}) },
+    events: {
+      ...base.events,
+      ...(incoming.events ?? {}),
+      thirteenthGrossOverrideEnabled:
+        incoming.events?.thirteenthGrossOverrideEnabled ??
+        incoming.events?.thirteenthGross != null,
+      thirteenthInssOverrideEnabled:
+        incoming.events?.thirteenthInssOverrideEnabled ??
+        incoming.events?.thirteenthInss != null,
+      thirteenthIrrfOverrideEnabled:
+        incoming.events?.thirteenthIrrfOverrideEnabled ??
+        incoming.events?.thirteenthIrrf != null,
+      plrIrrfOverrideEnabled:
+        incoming.events?.plrIrrfOverrideEnabled ??
+        incoming.events?.plrIrrf != null,
+    },
     deductions: {
       ...base.deductions,
       medical: Number(incoming.deductions?.medical) || 0,
