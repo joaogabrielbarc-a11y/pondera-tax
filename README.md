@@ -1,6 +1,17 @@
 # Pondera Tax
 
-Simulador e otimizador local-first de IRPF para trabalhadores CLT. A versão 1.0.0 cobre o ano-calendário 2026 (exercício 2027), compara os modelos simplificado e completo, audita a retenção mensal e calcula a margem de dedução via PGBL.
+Simulador e otimizador local-first de IRPF para trabalhadores CLT. A versão 1.1.0 cobre o ano-calendário 2026 (exercício 2027) em quatro etapas: dados anuais, otimização, comparação dos modelos e fechamento.
+
+## Escopo da V1.1.0
+
+- 12 holerites com cálculo automático de INSS, base de IRRF, imposto e líquido.
+- Override explícito do IRRF real por competência.
+- Férias calculadas separadamente, abono pecuniário isento e desconto do adiantamento no caixa do mês seguinte.
+- 13º salário, PLR, bônus, PGBL e VGBL em folha.
+- Rendas extras com apuração mensal de Carnê-Leão para pessoa física ou exterior.
+- Dependentes com renda tributável, educação e despesas médicas.
+- Comparação completa × simplificada e otimização do teto de 12% do PGBL.
+- Fechamento anual com renda total, base líquida, INSS, FGTS, IRRF e saldo.
 
 ## Rodar localmente
 
@@ -21,7 +32,8 @@ pnpm build:pages
 ## Privacidade e arquitetura
 
 - Todos os cálculos acontecem no navegador.
-- Holerites e deduções são salvos em IndexedDB, com fallback para localStorage.
+- Holerites, férias, rendas extras e deduções são salvos em IndexedDB, com fallback para localStorage.
+- Dados salvos pela V1.0.0 são migrados automaticamente para o esquema da V1.1.0.
 - Não há API, conta ou envio de dados fiscais.
 - As tabelas ficam isoladas em `lib/tax/rules-2026.ts`.
 - A navegação por hash é compatível com GitHub Pages.
@@ -40,6 +52,12 @@ O workflow `.github/workflows/deploy-pages.yml` publica automaticamente a branch
 
 URL esperada:
 
-`https://joaogabrielbarc-a11y.github.io/pondera-tax/?v=1.0.0#dashboard`
+`https://joaogabrielbarc-a11y.github.io/pondera-tax/?v=1.1.0#dashboard`
+
+## Referências tributárias
+
+- [Tabelas oficiais do IRPF 2026](https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2026)
+- [Portaria Interministerial MPS/MF nº 13/2026 — INSS](https://www.gov.br/previdencia/pt-br/assuntos/rpps/documentos/PortariaInterministerialMPSMF13de9dejaneirode2026.pdf)
+- [Receita Federal — PGBL e VGBL](https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/perguntas-frequentes/imposto-de-renda/dirpf/declaracao/pgvl-vgbl)
 
 > Este projeto oferece estimativas educacionais e não substitui a declaração oficial nem aconselhamento contábil individual.

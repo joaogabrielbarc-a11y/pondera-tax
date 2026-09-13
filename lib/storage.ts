@@ -1,4 +1,5 @@
 import type { TaxState } from "./tax/types";
+import { migrateTaxState } from "./tax/seed";
 
 const DB_NAME = "pondera-tax";
 const STORE_NAME = "tax-plans";
@@ -25,14 +26,14 @@ export async function loadTaxState(): Promise<TaxState | null> {
       const tx = db.transaction(STORE_NAME, "readonly");
       const request = tx.objectStore(STORE_NAME).get(PLAN_KEY);
       request.onsuccess = () =>
-        resolve((request.result as TaxState | undefined) ?? null);
+        resolve(request.result ? migrateTaxState(request.result) : null);
       request.onerror = () => reject(request.error);
     });
     db.close();
     return value;
   } catch {
     const raw = localStorage.getItem(FALLBACK_KEY);
-    return raw ? (JSON.parse(raw) as TaxState) : null;
+    return raw ? migrateTaxState(JSON.parse(raw)) : null;
   }
 }
 

@@ -9,6 +9,7 @@ export const TAX_RULES_2026 = {
   monthlySimplified: 607.2,
   annualSimplifiedCap: 17_640,
   pgblLimitRate: 0.12,
+  fgtsRate: 0.08,
   inss: [
     { upTo: 1_621, rate: 0.075 },
     { upTo: 2_902.84, rate: 0.09 },
