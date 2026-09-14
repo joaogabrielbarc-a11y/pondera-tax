@@ -239,6 +239,10 @@ try {
     path: resolve(evidence, "mobile.png"),
     fullPage: true,
   });
+  for (const width of [320,390,768]) {
+    await page.setViewportSize({width,height:844});
+    assert.ok(await page.locator(".sticky-kpis strong").evaluateAll(nodes => nodes.every(n => n.scrollWidth <= n.clientWidth+1)), `KPI currency overflow at ${width}px`);
+  }
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(
     JSON.stringify({

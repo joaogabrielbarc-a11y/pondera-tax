@@ -957,6 +957,18 @@ a:focus-visible {
   .sticky-kpis {
     gap: 6px;
     padding: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sticky-kpis > div:first-child {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sticky-kpis strong {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    font-size: clamp(14px, 4vw, 18px);
   }
   .sticky-kpis > div {
     padding: 8px;

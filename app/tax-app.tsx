@@ -415,6 +415,7 @@ function ProjectionChart({ projection }: { projection: Projection }) {
             ]}
           />
           <Area
+            isAnimationActive={false}
             type="monotone"
             dataKey="renda"
             stroke="#6397ff"
@@ -422,6 +423,7 @@ function ProjectionChart({ projection }: { projection: Projection }) {
             fill="url(#grossGradient)"
           />
           <Area
+            isAnimationActive={false}
             type="monotone"
             dataKey="irrf"
             stroke="#34d399"
