@@ -24,6 +24,8 @@ import {
   LayoutDashboard,
   Leaf,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   PiggyBank,
   Plus,
@@ -60,6 +62,7 @@ import { cn } from "@/lib/utils";
 import { loadTaxState, saveTaxState } from "@/lib/storage";
 import {
   calculatePgblOpportunity,
+  calculatePgblStudy,
   calculateProjection,
 } from "@/lib/tax/calculator";
 import { TaxReference } from "./tax-reference";
@@ -145,7 +148,11 @@ const dataSections: Array<{
   { id: "holerites", label: "Holerites", icon: ReceiptText },
   { id: "ferias", label: "Férias", icon: CalendarDays },
   { id: "eventos", label: "PLR e 13º salário", icon: Sparkles },
-  { id: "previdencia", label: "Previdência", icon: PiggyBank },
+  {
+    id: "previdencia",
+    label: "Previdência empresarial",
+    icon: PiggyBank,
+  },
   { id: "rendas", label: "Rendas extras", icon: Landmark },
   { id: "familia", label: "Família", icon: Users },
 ];
@@ -173,7 +180,8 @@ const titles: Record<
   otimizacao: {
     eyebrow: "Planejamento 2026",
     title: "Otimização tributária",
-    description: "Audite deduções e dimensione um aporte estratégico em PGBL.",
+    description:
+      "Dimensione o PGBL e compare o resultado futuro com um investimento tradicional.",
   },
   comparativo: {
     eyebrow: "Planejamento 2026",
@@ -325,6 +333,44 @@ function MoneyInput({
   );
 }
 
+function NumberInput({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max,
+  step = 0.1,
+  helper,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  helper?: string;
+}) {
+  return (
+    <label className="field-label">
+      <span>{label}</span>
+      <Input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => {
+          const parsed = Number(event.target.value) || 0;
+          onChange(
+            Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min, parsed)),
+          );
+        }}
+      />
+      {helper && <small>{helper}</small>}
+    </label>
+  );
+}
+
 function Toggle({
   checked,
   onChange,
@@ -459,7 +505,7 @@ function PayrollTable({
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="data-table min-w-[1050px]">
+        <table className="data-table payroll-table min-w-[1050px]">
           <thead>
             <tr>
               <th>Competência</th>
@@ -598,7 +644,7 @@ function VacationTable({
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="data-table min-w-[980px]">
+          <table className="data-table vacation-table min-w-[980px]">
             <thead>
               <tr>
                 <th>Mês</th>
@@ -877,7 +923,8 @@ function RetirementTable({
     <div className="grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
       <div className="space-y-5">
         <Card className="p-6 space-y-4">
-          <h2>Contribuição compulsória</h2>
+          <p className="section-kicker">Previdência em folha</p>
+          <h2>Plano empresarial do empregado</h2>
           <Toggle
             label="Preencher automaticamente os 12 meses por percentual"
             checked={state.retirement.automatic}
@@ -923,21 +970,12 @@ function RetirementTable({
               ))}
             </select>
           </label>
-          <MoneyInput
-            label="PGBL pessoal já aportado fora da folha"
-            value={state.deductions.pgblDirect}
-            onChange={(v) =>
-              setState((current) => ({
-                ...current,
-                deductions: { ...current.deductions, pgblDirect: v },
-              }))
-            }
-          />
           <p className="text-sm text-slate-400">
             No modo percentual, alterações no salário atualizam os aportes
             automaticamente. Ao desativar, os valores calculados ficam
             disponíveis para edição manual. A contrapartida não é dedução
-            pessoal.
+            pessoal. Aportes realizados fora da folha são registrados em
+            Otimização.
           </p>
         </Card>
         <Card className="overflow-hidden">
@@ -952,7 +990,7 @@ function RetirementTable({
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="data-table min-w-[620px]">
+            <table className="data-table pension-table min-w-[620px]">
               <thead>
                 <tr>
                   <th>Mês</th>
@@ -1093,7 +1131,7 @@ function ExtraIncomeTable({
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table min-w-[940px]">
+            <table className="data-table extra-income-table min-w-[940px]">
               <thead>
                 <tr>
                   <th>Mês</th>
@@ -1173,7 +1211,7 @@ function ExtraIncomeTable({
           <h2>Carnê-Leão consolidado por mês</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="data-table min-w-[650px]">
+          <table className="data-table carne-leao-table min-w-[650px]">
             <thead>
               <tr>
                 <th>Mês</th>
@@ -1243,7 +1281,7 @@ function FamilyTable({
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="data-table min-w-[840px]">
+          <table className="data-table family-table min-w-[840px]">
             <thead>
               <tr>
                 <th>Dependente</th>
@@ -1452,7 +1490,11 @@ function DeductionsView({
             Educação: teto individual de{" "}
             {formatBRL(TAX_RULES_2026.educationAnnualPerBeneficiary)}.
           </p>
-          <p>O INSS do 13º não é repetido no ajuste anual.</p>
+          <p>
+            INSS total pago: {formatBRL(projection.annualInss)}, dos quais{" "}
+            {formatBRL(projection.thirteenth.inss)} pertencem à apuração
+            exclusiva do 13º.
+          </p>
           <p>
             Pensão e outras deduções anuais: informe somente valores adicionais
             aos holerites.
@@ -1466,7 +1508,7 @@ function DeductionsView({
         <div className="audit-list">
           <h3>Deduções do titular</h3>
           {[
-            ["INSS sujeito ao ajuste anual", projection.deductibleInss],
+            ["INSS dedutível no ajuste anual", projection.deductibleInss],
             ["Saúde", state.deductions.medical],
             [
               "Educação (limitada)",
@@ -1559,163 +1601,279 @@ function DeductionsView({
   );
 }
 
+
 function OptimizerView({
   state,
+  setState,
   projection: currentProjection,
 }: {
   state: TaxState;
+  setState: React.Dispatch<React.SetStateAction<TaxState>>;
   projection: Projection;
 }) {
   const [extra, setExtra] = useState(0);
+  const [years, setYears] = useState(20);
+  const [pgblReturn, setPgblReturn] = useState(10);
+  const [traditionalReturn, setTraditionalReturn] = useState(10);
+  const [pgblFee, setPgblFee] = useState(0.8);
+  const [traditionalFee, setTraditionalFee] = useState(0.2);
+  const [reinvestmentReturn, setReinvestmentReturn] = useState(8);
+  const [pgblExitTax, setPgblExitTax] = useState(10);
+  const isClient = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
+  const available = currentProjection.pgbl.available;
+  const contribution = Math.min(extra, available);
   const projection = useMemo(
-    () => calculateProjection(state, extra),
-    [state, extra],
+    () => calculateProjection(state, contribution),
+    [state, contribution],
   );
   const opportunity = useMemo(() => calculatePgblOpportunity(state), [state]);
+  const study = useMemo(
+    () =>
+      calculatePgblStudy(state, {
+        contribution,
+        years,
+        pgblGrossReturnRate: pgblReturn / 100,
+        traditionalGrossReturnRate: traditionalReturn / 100,
+        pgblAdminFeeRate: pgblFee / 100,
+        traditionalAdminFeeRate: traditionalFee / 100,
+        reinvestmentRate: reinvestmentReturn / 100,
+        pgblExitTaxRate: pgblExitTax / 100,
+        traditionalGainsTaxRate: 0.15,
+      }),
+    [
+      state,
+      contribution,
+      years,
+      pgblReturn,
+      traditionalReturn,
+      pgblFee,
+      traditionalFee,
+      reinvestmentReturn,
+      pgblExitTax,
+    ],
+  );
+  const setDirectPgbl = (value: number) =>
+    setState((current) => ({
+      ...current,
+      deductions: { ...current.deductions, pgblDirect: value },
+    }));
+
   return (
     <div className="space-y-5">
-      <div className="notice-row">
-        <Info />
-        Simulação separada dos aportes já realizados: não altera seus dados.
-        Aportes reais são informados na seção Previdência.
-      </div>
-      <div className="result-ribbon">
+      <div className="result-ribbon optimizer-ribbon">
         <span>
-          Economia com o aporte simulado
-          <strong>
-            {formatBRL(
-              Math.max(
-                0,
-                currentProjection.recommended.taxDue -
-                  projection.recommended.taxDue,
-              ),
-            )}
+          Economia fiscal simulada
+          <strong>{formatBRL(study.taxEfficiency)}</strong>
+        </span>
+        <span>
+          Saldo da completa após aporte
+          <strong
+            className={
+              projection.complete.balance >= 0
+                ? "balance-positive"
+                : "balance-negative"
+            }
+          >
+            {formatBRL(Math.abs(projection.complete.balance))} ·{" "}
+            {projection.complete.balance >= 0 ? "a restituir" : "a pagar"}
           </strong>
         </span>
         <span>
-          Saldo após simulação
-          <strong>
-            {formatBRL(Math.abs(projection.recommended.balance))} ·{" "}
-            {projection.recommended.balance >= 0 ? "a restituir" : "a pagar"}
+          Vantagem futura projetada
+          <strong
+            className={
+              study.advantage >= 0 ? "text-emerald-300" : "text-amber-300"
+            }
+          >
+            {study.advantage >= 0 ? "+ " : "− "}
+            {formatBRL(Math.abs(study.advantage))}
           </strong>
         </span>
       </div>
-      <div className="grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
-        <Card className="p-6 sm:p-8">
+
+      <div className="optimizer-grid">
+        <Card className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="section-kicker">Aporte estratégico</p>
+              <p className="section-kicker">Deduções e aporte</p>
               <h2 className="mt-1 text-xl font-semibold text-white">
                 Margem PGBL até 12%
               </h2>
-              <p className="mt-2 text-sm text-slate-400">
-                O limite usa somente rendimentos tributáveis sujeitos ao ajuste
-                anual.
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                O teto usa rendimentos tributáveis sujeitos ao ajuste anual. O
+                aporte simulado fica travado na margem disponível.
               </p>
             </div>
             <span className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-emerald-300">
               <Leaf className="size-6" />
             </span>
           </div>
-          <div className="mt-8">
-            <div className="mb-3 flex justify-between text-sm">
-              <span className="text-slate-300">Aporte adicional simulado</span>
-              <strong className="text-blue-300">
-                {formatPercent(
-                  projection.pgbl.limit
-                    ? projection.pgbl.contributed / projection.pgbl.limit
-                    : 0,
-                )}{" "}
-                do limite
-              </strong>
-            </div>
-            <Input
-              type="number"
-              min={0}
-              step={100}
-              value={extra}
-              onChange={(event) =>
-                setExtra(Math.max(0, Number(event.target.value) || 0))
-              }
-              className="h-12 border-white/10 bg-[#0b1423] text-lg text-white"
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <MoneyInput
+              label="PGBL já aportado fora da folha"
+              value={state.deductions.pgblDirect}
+              onChange={setDirectPgbl}
+              helper="Aporte real próprio, fora do plano empresarial."
             />
-            <input
-              aria-label="Aporte PGBL fora da folha"
-              type="range"
-              min={0}
-              max={Math.max(1, Math.ceil(projection.pgbl.limit))}
-              step={100}
-              value={Math.min(extra, projection.pgbl.limit)}
-              onChange={(event) => setExtra(Number(event.target.value))}
-              className="pgbl-range mt-5 w-full"
-            />
+            <label className="field-label">
+              <span>Aporte adicional simulado</span>
+              <Input
+                aria-label="Aporte adicional simulado"
+                type="number"
+                min={0}
+                max={available}
+                step={100}
+                value={contribution}
+                onChange={(event) =>
+                  setExtra(
+                    Math.min(
+                      available,
+                      Math.max(0, Number(event.target.value) || 0),
+                    ),
+                  )
+                }
+              />
+              <small>Máximo disponível: {formatBRL(available)}.</small>
+            </label>
           </div>
-          <div className="mt-7 grid gap-3 sm:grid-cols-3">
+          <input
+            aria-label="Definir aporte adicional PGBL"
+            type="range"
+            min={0}
+            max={Math.max(1, Math.ceil(available))}
+            step={100}
+            value={contribution}
+            onChange={(event) => setExtra(Number(event.target.value))}
+            className="pgbl-range mt-5 w-full"
+          />
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="soft-stat">
               <span>Limite anual</span>
-              <strong>{formatBRL(projection.pgbl.limit)}</strong>
+              <strong>{formatBRL(currentProjection.pgbl.limit)}</strong>
             </div>
             <div className="soft-stat">
-              <span>Já aportado</span>
-              <strong>{formatBRL(projection.pgbl.contributed)}</strong>
+              <span>Realizado</span>
+              <strong>{formatBRL(currentProjection.pgbl.contributed)}</strong>
             </div>
             <div className="soft-stat">
               <span>Margem disponível</span>
-              <strong className="text-blue-300">
-                {formatBRL(projection.pgbl.available)}
+              <strong className="text-blue-300">{formatBRL(available)}</strong>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <p className="section-kicker">Consolidação</p>
+          <h2 className="mt-1 font-semibold text-white">Deduções legais</h2>
+          <div className="mt-5 space-y-4">
+            <div className="scenario-row">
+              <span>Total do modelo completo</span>
+              <strong>{formatBRL(currentProjection.complete.deductions)}</strong>
+            </div>
+            <div className="scenario-row">
+              <span>INSS pago no ano</span>
+              <strong>{formatBRL(currentProjection.annualInss)}</strong>
+            </div>
+            <div className="scenario-row">
+              <span>INSS dedutível no ajuste</span>
+              <strong>{formatBRL(currentProjection.deductibleInss)}</strong>
+            </div>
+            <div className="scenario-row">
+              <span>INSS do 13º · exclusivo</span>
+              <strong>{formatBRL(currentProjection.thirteenth.inss)}</strong>
+            </div>
+            <div className="scenario-row border-t border-white/8 pt-4">
+              <span>Economia usando toda a margem</span>
+              <strong className="text-emerald-300">
+                {formatBRL(opportunity.taxSavings)}
               </strong>
             </div>
           </div>
-          {projection.pgbl.excess > 0 && (
-            <div className="mt-5 flex gap-3 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-100">
-              <Info className="mt-0.5 size-4 shrink-0 text-amber-300" />
-              <p>
-                {formatBRL(projection.pgbl.excess)} excede o teto dedutível e
-                não reduz adicionalmente a base.
-              </p>
-            </div>
-          )}
-        </Card>
-        <Card className="relative overflow-hidden p-6">
-          <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl" />
-          <div className="relative">
-            <p className="section-kicker">Cenário-limite</p>
-            <h2 className="mt-1 font-semibold text-white">
-              Se utilizar toda a margem disponível
-            </h2>
-            <div className="mt-6 space-y-4">
-              <div className="scenario-row">
-                <span>Aporte adicional</span>
-                <strong>{formatBRL(opportunity.current.pgbl.available)}</strong>
-              </div>
-              <div className="scenario-row">
-                <span>Imposto completo atual</span>
-                <strong>
-                  {formatBRL(opportunity.current.complete.taxDue)}
-                </strong>
-              </div>
-              <div className="scenario-row">
-                <span>Imposto após aporte</span>
-                <strong>
-                  {formatBRL(opportunity.optimized.complete.taxDue)}
-                </strong>
-              </div>
-              <div className="scenario-row border-t border-white/8 pt-4">
-                <span>Economia vs. melhor modelo atual</span>
-                <strong className="text-emerald-300">
-                  + {formatBRL(opportunity.balanceGain)}
-                </strong>
-              </div>
-            </div>
-            <div className="mt-6 rounded-xl border border-blue-400/20 bg-blue-500/[.06] p-4 text-xs leading-5 text-slate-300">
-              O benefício é diferimento tributário, não rentabilidade garantida.
-              Avalie custos, liquidez e tributação no resgate. A dedução exige
-              elegibilidade e contribuição à previdência oficial; aportes da
-              empresa não são dedução pessoal.
-            </div>
-          </div>
+          <p className="mt-5 text-xs leading-5 text-slate-400">
+            O INSS do 13º integra o total pago, mas já reduz a base exclusiva do
+            13º e não é repetido na base do ajuste anual.
+          </p>
         </Card>
       </div>
+
+      <Card className="overflow-hidden">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Estudo financeiro</p>
+            <h2>PGBL + reinvestimento da economia fiscal</h2>
+            <p>
+              Comparação de um aporte único com investimento tradicional,
+              inspirada nas premissas da planilha PGBL.xlsx.
+            </p>
+          </div>
+        </div>
+        <div className="study-layout">
+          <div className="study-inputs">
+            <NumberInput label="Horizonte (anos)" value={years} onChange={setYears} min={1} max={50} step={1} />
+            <NumberInput label="Rentabilidade bruta PGBL (% a.a.)" value={pgblReturn} onChange={setPgblReturn} max={100} />
+            <NumberInput label="Taxa de administração PGBL (% a.a.)" value={pgblFee} onChange={setPgblFee} max={20} />
+            <NumberInput label="Rentabilidade investimento (% a.a.)" value={traditionalReturn} onChange={setTraditionalReturn} max={100} />
+            <NumberInput label="Taxa de administração investimento (% a.a.)" value={traditionalFee} onChange={setTraditionalFee} max={20} />
+            <NumberInput label="Rentabilidade do reinvestimento (% a.a.)" value={reinvestmentReturn} onChange={setReinvestmentReturn} max={100} />
+            <label className="field-label">
+              <span>Alíquota de IR no resgate do PGBL</span>
+              <select
+                className="input-select"
+                value={pgblExitTax}
+                onChange={(event) => setPgblExitTax(Number(event.target.value))}
+              >
+                {[10, 15, 20, 25, 30, 35].map((rate) => (
+                  <option key={rate} value={rate}>{rate}%</option>
+                ))}
+              </select>
+              <small>Escolha conforme o regime e o prazo esperado do plano.</small>
+            </label>
+          </div>
+          <div className="study-chart" aria-label="Evolução patrimonial comparada">
+            {isClient ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={study.series}
+                  margin={{ top: 10, right: 8, left: -16, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="pgblStudy" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#34d399" stopOpacity={0.32} />
+                      <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="traditionalStudy" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6397ff" stopOpacity={0.24} />
+                      <stop offset="95%" stopColor="#6397ff" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#ffffff0d" vertical={false} />
+                  <XAxis dataKey="year" tick={{ fill: "#71819c", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={(value) => formatBRL(value, true)} tick={{ fill: "#71819c", fontSize: 10 }} axisLine={false} tickLine={false} width={82} />
+                  <Tooltip formatter={(value) => formatBRL(Number(value))} labelFormatter={(year) => `Ano ${year}`} contentStyle={{ background: "#0c1626", border: "1px solid #ffffff18", borderRadius: 10 }} />
+                  <Area type="monotone" dataKey="pgblStrategyNet" name="PGBL + eficiência" stroke="#34d399" fill="url(#pgblStudy)" strokeWidth={2} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="traditionalNet" name="Investimento tradicional" stroke="#6397ff" fill="url(#traditionalStudy)" strokeWidth={2} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : null}
+          </div>
+        </div>
+        <div className="study-results">
+          <div><span>PGBL líquido</span><strong>{formatBRL(study.pgbl.netBalance)}</strong><small>Taxa adm.: {formatBRL(study.pgbl.administrationCost)} · IR: {formatBRL(study.pgbl.redemptionTax)}</small></div>
+          <div><span>Economia fiscal reinvestida</span><strong>{formatBRL(study.reinvestment.netBalance)}</strong><small>Economia inicial: {formatBRL(study.taxEfficiency)}</small></div>
+          <div><span>Estratégia PGBL total</span><strong>{formatBRL(study.pgblStrategyNet)}</strong><small>PGBL líquido + reinvestimento</small></div>
+          <div><span>Investimento tradicional</span><strong>{formatBRL(study.traditional.netBalance)}</strong><small>Taxa adm.: {formatBRL(study.traditional.administrationCost)} · IR ganhos: {formatBRL(study.traditional.gainsTax)}</small></div>
+        </div>
+        <div className="mx-5 mb-5 rounded-xl border border-blue-400/20 bg-blue-500/[.06] p-4 text-xs leading-5 text-slate-300 sm:mx-6">
+          Projeção educacional em valores nominais, com taxas constantes e sem
+          inflação, carregamento, portabilidade ou diferenças entre fundos. O
+          PGBL sofre IR sobre o valor total resgatado; o investimento tradicional
+          usa 15% sobre ganhos. Rentabilidade passada não garante resultado.
+        </div>
+      </Card>
     </div>
   );
 }
@@ -2184,7 +2342,8 @@ function MonthDialog({
           onChange={(v) => setDraft({ ...draft, actualIrrf: v })}
         />
         <p className="text-sm text-slate-400">
-          PGBL e VGBL são configurados exclusivamente em Previdência.
+          PGBL e VGBL em folha são configurados exclusivamente em Previdência
+          empresarial.
         </p>
         <DialogFooter className="mt-3">
           <Button
@@ -2644,6 +2803,7 @@ export function TaxApp() {
   const [savedState, setSavedState] = useState<TaxState | null>(null);
   const [storageError, setStorageError] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [editingMonth, setEditingMonth] = useState<number | null>(null);
   const [editingVacation, setEditingVacation] = useState<number | "new" | null>(
     null,
@@ -2892,13 +3052,18 @@ export function TaxApp() {
     const href = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = href;
-    anchor.download = "pondera-tax-2026-v1.2.json";
+    anchor.download = "pondera-tax-2026-v1.3.json";
     anchor.click();
     URL.revokeObjectURL(href);
   };
 
   return (
-    <div className="min-h-screen">
+    <div
+      className={cn(
+        "min-h-screen app-shell",
+        sidebarCollapsed && "sidebar-collapsed",
+      )}
+    >
       {mobileMenu && (
         <button
           className="sidebar-backdrop"
@@ -2907,16 +3072,25 @@ export function TaxApp() {
         />
       )}
       <aside className={cn("sidebar-shell", mobileMenu && "sidebar-open")}>
-        <div className="flex items-center gap-3 px-2">
+        <div className="sidebar-brand">
           <span className="brand-mark">
             <span>P</span>
           </span>
-          <div>
+          <div className="sidebar-copy">
             <strong className="block text-sm text-white">Pondera</strong>
             <span className="text-[10px] tracking-[.18em] text-slate-500">
               TAX
             </span>
           </div>
+          <button
+            className="sidebar-collapse"
+            onClick={() => setSidebarCollapsed((value) => !value)}
+            aria-label={sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral"}
+            aria-expanded={!sidebarCollapsed}
+            title={sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+          </button>
         </div>
         <nav className="sidebar-navigation" aria-label="Navegação principal">
           <p className="nav-group-label">DADOS DO ANO</p>
@@ -2926,6 +3100,7 @@ export function TaxApp() {
               <button
                 key={item.id}
                 onClick={() => navigate("dados", item.id)}
+                title={item.label}
                 aria-current={
                   view === "dados" && dataSection === item.id
                     ? "page"
@@ -2939,7 +3114,7 @@ export function TaxApp() {
                 )}
               >
                 <Icon />
-                {item.label}
+                <span className="nav-label">{item.label}</span>
               </button>
             );
           })}
@@ -2957,6 +3132,7 @@ export function TaxApp() {
               <button
                 key={item.id}
                 onClick={() => navigate(item.id)}
+                title={item.label}
                 aria-current={view === item.id ? "page" : undefined}
                 className={cn(
                   "nav-item",
@@ -2964,12 +3140,12 @@ export function TaxApp() {
                 )}
               >
                 <Icon />
-                {item.label}
+                <span className="nav-label">{item.label}</span>
               </button>
             );
           })}
         </nav>
-        <div className="mt-auto rounded-xl border border-white/7 bg-white/[.025] p-4">
+        <div className="privacy-card mt-auto rounded-xl border border-white/7 bg-white/[.025] p-4">
           <div className="flex items-center gap-2 text-xs text-emerald-300">
             <ShieldCheck className="size-4" />
             Dados somente neste dispositivo
@@ -2987,7 +3163,7 @@ export function TaxApp() {
         >
           <Menu />
         </button>
-        <div className="ml-3 min-w-0 lg:ml-0">
+        <div className="topbar-title ml-3 min-w-0 lg:ml-0">
           <span className="block truncate text-xs font-medium text-slate-200">
             Pondera Tax
           </span>
@@ -2995,7 +3171,40 @@ export function TaxApp() {
             Ano-calendário 2026 · Exercício 2027
           </span>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="topbar-kpis" aria-label="Resumo tributário">
+          <div className="topbar-kpi kpi-gross">
+            <span>Renda bruta</span>
+            <strong>{formatBRL(projection.totalGrossIncome)}</strong>
+          </div>
+          {[projection.simplified, projection.complete].map((result) => (
+            <div
+              key={result.model}
+              className={cn(
+                "topbar-kpi kpi-model",
+                result.balance > 0
+                  ? "kpi-refund"
+                  : result.balance < 0
+                    ? "kpi-payable"
+                    : "kpi-neutral",
+                result.model === projection.recommended.model && "kpi-optimal",
+              )}
+            >
+              <span>
+                {result.model === "complete" ? "Completa" : "Simplificada"}
+                {result.model === projection.recommended.model ? " · melhor" : ""}
+              </span>
+              <strong>{formatBRL(Math.abs(result.balance))}</strong>
+              <small>
+                {result.balance === 0
+                  ? "Sem saldo"
+                  : result.balance > 0
+                    ? "A restituir"
+                    : "A pagar"}
+              </small>
+            </div>
+          ))}
+        </div>
+        <div className="topbar-actions ml-auto flex items-center gap-2">
           <span className="hidden items-center gap-2 text-[11px] text-slate-500 sm:flex">
             <span
               className={cn(
@@ -3016,38 +3225,7 @@ export function TaxApp() {
           </Button>
         </div>
       </header>
-      <main className="pb-10 lg:ml-[236px]">
-        <div className="sticky-kpis" aria-label="Resumo tributário">
-          <div>
-            <span>Renda bruta total</span>
-            <strong>{formatBRL(projection.totalGrossIncome)}</strong>
-          </div>
-          {[projection.simplified, projection.complete].map((result) => (
-            <div
-              key={result.model}
-              className={cn(
-                "kpi-model",
-                result.taxDue === projection.recommended.taxDue &&
-                  "kpi-optimal",
-              )}
-            >
-              <span>
-                {result.model === "complete" ? "Completa" : "Simplificada"}
-                {result.taxDue === projection.recommended.taxDue
-                  ? " · melhor resultado"
-                  : ""}
-              </span>
-              <strong>{formatBRL(Math.abs(result.balance))}</strong>
-              <small>
-                {result.balance === 0
-                  ? "Sem saldo"
-                  : result.balance > 0
-                    ? "A restituir"
-                    : "A pagar"}
-              </small>
-            </div>
-          ))}
-        </div>
+      <main className="app-main pb-10">
         <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -3060,7 +3238,7 @@ export function TaxApp() {
               </p>
             </div>
             <span className="rounded-full border border-white/8 bg-white/[.025] px-3 py-1.5 text-[11px] text-slate-400">
-              Versão 1.2.0
+              Versão 1.3.0
             </span>
           </div>
           {view === "dados" && (
@@ -3114,7 +3292,11 @@ export function TaxApp() {
             />
           )}
           {view === "otimizacao" && (
-            <OptimizerView state={state} projection={projection} />
+            <OptimizerView
+              state={state}
+              setState={setState}
+              projection={projection}
+            />
           )}
           {view === "comparativo" && <ComparisonView projection={projection} />}
           {view === "dashboard" && <DashboardView projection={projection} />}
@@ -3136,7 +3318,7 @@ export function TaxApp() {
             </span>
             <button
               onClick={() => {
-                if (window.confirm("Restaurar os dados de exemplo da V1.2?"))
+                if (window.confirm("Restaurar os dados de exemplo da V1.3?"))
                   setState(createInitialState());
               }}
               className="inline-flex items-center gap-1.5 hover:text-slate-400"

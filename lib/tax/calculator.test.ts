@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateInss,
   calculatePgblOpportunity,
+  calculatePgblStudy,
   calculateProjection,
   progressiveTax,
   calculateThirteenth,
@@ -347,6 +348,43 @@ describe("regressões da auditoria V1.2", () => {
     state.months[0].dependents = 4;
     state.extraIncome = [{ ...createExtraIncome(0), gross: 10000 }];
     expect(calculateProjection(state).carneLeao[0].deductions).toBe(607.2);
+  });
+
+  it("deduz cada dependente uma única vez no IRRF do holerite", () => {
+    const state = createInitialState();
+    state.vacations = [];
+    state.months[0].salary = 10_000;
+    state.months[0].dependents = 1;
+    const result = calculateProjection(state).months[0];
+    expect(result.detailedDeductions).toBe(
+      money(result.inssUsed + TAX_RULES_2026.dependentMonthly),
+    );
+  });
+
+  it("estudo PGBL respeita a margem e reconcilia custos e impostos", () => {
+    const state = createInitialState();
+    const current = calculateProjection(state);
+    const study = calculatePgblStudy(state, {
+      contribution: current.pgbl.available * 2,
+      years: 20,
+      pgblGrossReturnRate: 0.1,
+      traditionalGrossReturnRate: 0.1,
+      pgblAdminFeeRate: 0.01,
+      traditionalAdminFeeRate: 0.002,
+      reinvestmentRate: 0.08,
+      pgblExitTaxRate: 0.1,
+      traditionalGainsTaxRate: 0.15,
+    });
+    expect(study.contribution).toBe(current.pgbl.available);
+    expect(study.taxEfficiency).toBeGreaterThan(0);
+    expect(study.pgbl.administrationCost).toBeGreaterThan(0);
+    expect(study.pgblStrategyNet).toBe(
+      money(study.pgbl.netBalance + study.reinvestment.netBalance),
+    );
+    expect(study.series).toHaveLength(21);
+    expect(study.series.at(-1)?.pgblStrategyNet).toBe(
+      study.pgblStrategyNet,
+    );
   });
 
   it("aplica teto de educação individual e reconcilia somas com centavos", () => {

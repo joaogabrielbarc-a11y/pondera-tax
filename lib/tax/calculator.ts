@@ -3,6 +3,8 @@ import type {
   CarneLeaoMonth,
   DeclarationResult,
   MonthlyResult,
+  PgblStudyAssumptions,
+  PgblStudyResult,
   ProgressiveBracket,
   Projection,
   TaxState,
@@ -664,5 +666,134 @@ export function calculatePgblOpportunity(state: TaxState) {
     balanceGain: money(
       Math.max(0, optimized.recommended.balance - current.recommended.balance),
     ),
+  };
+}
+
+const futureAfterAnnualFee = (
+  principal: number,
+  grossRate: number,
+  annualFee: number,
+  years: number,
+) => principal * Math.pow((1 + grossRate) * (1 - annualFee), years);
+
+const futureNetTraditional = (
+  principal: number,
+  grossRate: number,
+  annualFee: number,
+  gainsTaxRate: number,
+  years: number,
+) => {
+  const grossWithoutFees = principal * Math.pow(1 + grossRate, years);
+  const afterFees = futureAfterAnnualFee(
+    principal,
+    grossRate,
+    annualFee,
+    years,
+  );
+  const gainsTax = Math.max(0, afterFees - principal) * gainsTaxRate;
+  return {
+    grossWithoutFees: money(grossWithoutFees),
+    administrationCost: money(Math.max(0, grossWithoutFees - afterFees)),
+    gainsTax: money(gainsTax),
+    netBalance: money(afterFees - gainsTax),
+  };
+};
+
+/** Compara um aporte único em PGBL com investimento tradicional equivalente. */
+export function calculatePgblStudy(
+  state: TaxState,
+  assumptions: PgblStudyAssumptions,
+): PgblStudyResult {
+  const current = calculateProjectionCore(state, 0);
+  const contribution = money(
+    Math.min(
+      current.pgbl.available,
+      Math.max(0, assumptions.contribution),
+    ),
+  );
+  const years = Math.max(1, Math.min(50, Math.round(assumptions.years)));
+  const taxEfficiency = money(
+    Math.max(
+      0,
+      current.complete.taxDue -
+        calculateProjectionCore(state, contribution).complete.taxDue,
+    ),
+  );
+  const traditional = futureNetTraditional(
+    contribution,
+    assumptions.traditionalGrossReturnRate,
+    assumptions.traditionalAdminFeeRate,
+    assumptions.traditionalGainsTaxRate,
+    years,
+  );
+  const pgblGrossWithoutFees =
+    contribution * Math.pow(1 + assumptions.pgblGrossReturnRate, years);
+  const pgblAfterFees = futureAfterAnnualFee(
+    contribution,
+    assumptions.pgblGrossReturnRate,
+    assumptions.pgblAdminFeeRate,
+    years,
+  );
+  const pgblTax = Math.max(0, pgblAfterFees) * assumptions.pgblExitTaxRate;
+  const pgbl = {
+    grossWithoutFees: money(pgblGrossWithoutFees),
+    administrationCost: money(
+      Math.max(0, pgblGrossWithoutFees - pgblAfterFees),
+    ),
+    redemptionTax: money(pgblTax),
+    netBalance: money(pgblAfterFees - pgblTax),
+  };
+  const reinvestment = futureNetTraditional(
+    taxEfficiency,
+    assumptions.reinvestmentRate,
+    0,
+    assumptions.traditionalGainsTaxRate,
+    years,
+  );
+  const pgblStrategyNet = money(pgbl.netBalance + reinvestment.netBalance);
+  const series = Array.from({ length: years + 1 }, (_, year) => {
+    const traditionalAtYear = futureNetTraditional(
+      contribution,
+      assumptions.traditionalGrossReturnRate,
+      assumptions.traditionalAdminFeeRate,
+      assumptions.traditionalGainsTaxRate,
+      year,
+    );
+    const pgblAtYear = money(
+      futureAfterAnnualFee(
+        contribution,
+        assumptions.pgblGrossReturnRate,
+        assumptions.pgblAdminFeeRate,
+        year,
+      ) *
+        (1 - assumptions.pgblExitTaxRate),
+    );
+    const reinvestmentAtYear = futureNetTraditional(
+      taxEfficiency,
+      assumptions.reinvestmentRate,
+      0,
+      assumptions.traditionalGainsTaxRate,
+      year,
+    );
+    return {
+      year,
+      pgblStrategyNet: money(pgblAtYear + reinvestmentAtYear.netBalance),
+      traditionalNet: traditionalAtYear.netBalance,
+    };
+  });
+
+  return {
+    contribution,
+    taxEfficiency,
+    pgbl,
+    reinvestment: {
+      grossBalance: reinvestment.grossWithoutFees,
+      gainsTax: reinvestment.gainsTax,
+      netBalance: reinvestment.netBalance,
+    },
+    traditional,
+    pgblStrategyNet,
+    advantage: money(pgblStrategyNet - traditional.netBalance),
+    series,
   };
 }

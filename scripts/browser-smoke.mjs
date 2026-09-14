@@ -51,6 +51,10 @@ try {
   };
   if (process.env.PONDERA_BROWSER_EXECUTABLE)
     options.executablePath = process.env.PONDERA_BROWSER_EXECUTABLE;
+  if (process.env.PONDERA_BROWSER_ARGS_MODULE) {
+    const packed = (await import(process.env.PONDERA_BROWSER_ARGS_MODULE)).default;
+    options.args = packed.args;
+  }
   if (process.env.PONDERA_CHROMIUM_MODULE) {
     const packed = (await import(process.env.PONDERA_CHROMIUM_MODULE)).default;
     options = {
@@ -75,11 +79,18 @@ try {
     await page.locator(".bottom-nav,.step-strip,.subtabs").count(),
     0,
   );
+  assert.equal(await page.locator(".sticky-kpis").count(), 0);
+  assert.equal(await page.locator(".topbar-kpi").count(), 3);
+  await page.getByRole("button", { name: "Recolher barra lateral" }).click();
+  await page.waitForTimeout(220);
+  assert.ok((await page.locator("aside").evaluate((node) => node.clientWidth)) <= 80);
+  await page.getByRole("button", { name: "Expandir barra lateral" }).click();
+  await page.waitForTimeout(220);
   for (const label of [
     "Holerites",
     "Férias",
     "PLR e 13º salário",
-    "Previdência",
+    "Previdência empresarial",
     "Rendas extras",
     "Família",
     "Deduções legais",
@@ -160,7 +171,7 @@ try {
   await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await page
     .locator("aside")
-    .getByRole("button", { name: "Previdência", exact: true })
+    .getByRole("button", { name: "Previdência empresarial", exact: true })
     .click();
   await page
     .getByLabel("PGBL · % do salário base bruto", { exact: true })
@@ -174,6 +185,13 @@ try {
     await page.getByLabel("PGBL de Janeiro", { exact: true }).inputValue(),
     "400",
   );
+  await page
+    .locator("aside")
+    .getByRole("button", { name: "Otimização", exact: true })
+    .click();
+  await page.getByLabel("Aporte adicional simulado", { exact: true }).fill("5000");
+  assert.ok(await page.getByText("PGBL + reinvestimento da economia fiscal").isVisible());
+  assert.ok(await page.locator(".study-chart").isVisible());
   assert.ok(
     await page.getByLabel("PGBL de Janeiro", { exact: true }).isDisabled(),
   );
@@ -214,7 +232,7 @@ try {
     "Holerites",
     "Férias",
     "PLR e 13º salário",
-    "Previdência",
+    "Previdência empresarial",
     "Rendas extras",
     "Família",
     "Deduções legais",
@@ -241,7 +259,7 @@ try {
   });
   for (const width of [320,390,768]) {
     await page.setViewportSize({width,height:844});
-    assert.ok(await page.locator(".sticky-kpis strong").evaluateAll(nodes => nodes.every(n => n.scrollWidth <= n.clientWidth+1)), `KPI currency overflow at ${width}px`);
+    assert.ok(await page.locator(".topbar-kpi strong").evaluateAll(nodes => nodes.every(n => n.scrollWidth <= n.clientWidth+1)), `KPI currency overflow at ${width}px`);
   }
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(
@@ -252,10 +270,13 @@ try {
       checks: [
         "navigation",
         "no duplicate nav",
+        "collapsible sidebar",
+        "compact KPI header",
         "live preview",
         "override zero",
         "reload persistence",
         "pension auto-fill",
+        "PGBL financial study",
         "annual extra income",
         "no page overflow",
         "no browser errors",

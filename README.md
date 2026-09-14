@@ -1,20 +1,20 @@
 # Pondera Tax
 
-Simulador e otimizador local-first de IRPF para trabalhadores CLT. A versão 1.2.0 cobre o ano-calendário 2026 (exercício 2027) com navegação exclusivamente lateral, resumo fixo dos dois modelos, dados anuais, deduções, otimização, comparação e fechamento.
+Simulador e otimizador local-first de IRPF para trabalhadores CLT. A versão 1.3.0 cobre o ano-calendário 2026 (exercício 2027) com navegação lateral retrátil, KPIs compactos, dados anuais, deduções, otimização PGBL, comparação e fechamento.
 
-Veja o [relatório completo de correções e premissas da auditoria](AUDIT-V1.2.0.md).
+Veja o [relatório completo de correções e premissas da auditoria](AUDIT-V1.3.0.md).
 
-## Escopo da V1.2.0
+## Escopo da V1.3.0
 
 - 12 holerites com cálculo automático de INSS, base de IRRF, imposto e líquido.
 - Overrides explícitos de IRRF e INSS, inclusive valor zero, com prévia em tempo real.
-- Previdência por percentual nos 12 meses e contrapartida da empresa.
+- Previdência empresarial por percentual nos 12 meses e contrapartida da empresa.
 - Tabelas oficiais de referência e detalhamento de deduções por pessoa.
 - Férias calculadas separadamente, abono pecuniário isento e desconto do adiantamento no caixa do mês seguinte.
 - 13º salário, PLR, bônus, PGBL e VGBL em folha.
 - Rendas extras com apuração mensal de Carnê-Leão para pessoa física ou exterior.
 - Dependentes com renda tributável, educação e despesas médicas.
-- Comparação completa × simplificada e otimização do teto de 12% do PGBL.
+- Comparação completa × simplificada, trava do teto de 12% e estudo financeiro PGBL × investimento tradicional.
 - Fechamento anual com renda total, base líquida, INSS, FGTS, IRRF e saldo.
 
 ## Rodar localmente
@@ -37,7 +37,7 @@ pnpm build:pages
 
 - Todos os cálculos acontecem no navegador.
 - Holerites, férias, rendas extras e deduções são salvos em IndexedDB, com cópia localStorage datada e escritas serializadas.
-- Dados salvos pelas V1.0.0/V1.1.0 são migrados automaticamente para o esquema da V1.2.0.
+- Dados salvos pelas versões anteriores são migrados automaticamente.
 - Não há API, conta ou envio de dados fiscais.
 - As tabelas ficam isoladas em `lib/tax/rules-2026.ts`.
 - A navegação por hash é compatível com GitHub Pages.
@@ -56,7 +56,7 @@ O workflow `.github/workflows/deploy-pages.yml` publica automaticamente a branch
 
 URL esperada:
 
-`https://joaogabrielbarc-a11y.github.io/pondera-tax/?v=1.2.0#dashboard`
+`https://joaogabrielbarc-a11y.github.io/pondera-tax/?v=1.3.0#dashboard`
 
 ## Referências tributárias
 

@@ -206,6 +206,47 @@ export type Projection = {
   };
 };
 
+export type PgblStudyAssumptions = {
+  contribution: number;
+  years: number;
+  pgblGrossReturnRate: number;
+  traditionalGrossReturnRate: number;
+  pgblAdminFeeRate: number;
+  traditionalAdminFeeRate: number;
+  reinvestmentRate: number;
+  pgblExitTaxRate: number;
+  traditionalGainsTaxRate: number;
+};
+
+export type PgblStudyResult = {
+  contribution: number;
+  taxEfficiency: number;
+  pgbl: {
+    grossWithoutFees: number;
+    administrationCost: number;
+    redemptionTax: number;
+    netBalance: number;
+  };
+  reinvestment: {
+    grossBalance: number;
+    gainsTax: number;
+    netBalance: number;
+  };
+  traditional: {
+    grossWithoutFees: number;
+    administrationCost: number;
+    gainsTax: number;
+    netBalance: number;
+  };
+  pgblStrategyNet: number;
+  advantage: number;
+  series: Array<{
+    year: number;
+    pgblStrategyNet: number;
+    traditionalNet: number;
+  }>;
+};
+
 export type ProgressiveBracket = {
   upTo: number;
   rate: number;
