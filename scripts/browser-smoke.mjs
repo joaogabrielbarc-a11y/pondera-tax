@@ -185,13 +185,6 @@ try {
     await page.getByLabel("PGBL de Janeiro", { exact: true }).inputValue(),
     "400",
   );
-  await page
-    .locator("aside")
-    .getByRole("button", { name: "Otimização", exact: true })
-    .click();
-  await page.getByLabel("Aporte adicional simulado", { exact: true }).fill("5000");
-  assert.ok(await page.getByText("PGBL + reinvestimento da economia fiscal").isVisible());
-  assert.ok(await page.locator(".study-chart").isVisible());
   assert.ok(
     await page.getByLabel("PGBL de Janeiro", { exact: true }).isDisabled(),
   );
@@ -204,6 +197,19 @@ try {
     await page.getByLabel("PGBL de Janeiro", { exact: true }).inputValue(),
     "400",
   );
+  await page
+    .locator("aside")
+    .getByRole("button", { name: "Otimização", exact: true })
+    .click();
+  await page
+    .getByLabel("Aporte adicional simulado", { exact: true })
+    .fill("5000");
+  assert.ok(
+    await page
+      .getByText("PGBL + reinvestimento da economia fiscal")
+      .isVisible(),
+  );
+  assert.ok(await page.locator(".study-chart").isVisible());
   await page
     .locator("aside")
     .getByRole("button", { name: "Rendas extras", exact: true })
