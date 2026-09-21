@@ -1107,6 +1107,87 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
   gap: 20px;
 }
+.pgbl-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.pgbl-verdict-icon {
+  display: inline-flex;
+  height: 42px;
+  width: 42px;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  border-radius: 12px;
+}
+.pgbl-verdict-icon svg {
+  height: 20px;
+  width: 20px;
+}
+.pgbl-verdict h2 {
+  margin-top: 4px;
+  color: #edf4ff;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.pgbl-verdict p:last-child {
+  margin-top: 6px;
+  color: #8191aa;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.pgbl-verdict-positive {
+  border-color: rgb(52 211 153 / 0.3);
+  background: rgb(16 185 129 / 0.065);
+}
+.pgbl-verdict-positive .pgbl-verdict-icon {
+  border-color: rgb(52 211 153 / 0.25);
+  background: rgb(16 185 129 / 0.12);
+  color: #6ee7b7;
+}
+.pgbl-verdict-negative {
+  border-color: rgb(251 146 60 / 0.3);
+  background: rgb(251 146 60 / 0.055);
+}
+.pgbl-verdict-negative .pgbl-verdict-icon {
+  border-color: rgb(251 146 60 / 0.25);
+  background: rgb(251 146 60 / 0.1);
+  color: #fdba74;
+}
+.pgbl-verdict-neutral .pgbl-verdict-icon {
+  background: rgb(99 151 255 / 0.08);
+  color: #93b8ff;
+}
+.saved-pgbl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 12px;
+  background: rgb(5 12 22 / 0.27);
+  padding: 13px;
+}
+.saved-pgbl-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.saved-pgbl-row span,
+.saved-pgbl-row small {
+  color: #718099;
+  font-size: 11px;
+}
+.saved-pgbl-row strong {
+  color: #e5edf9;
+  font-variant-numeric: tabular-nums;
+}
 .study-layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.7fr) minmax(0, 1.3fr);
@@ -1277,6 +1358,10 @@ a:focus-visible {
   }
   .study-chart {
     height: 280px;
+  }
+  .saved-pgbl-row {
+    align-items: stretch;
+    flex-direction: column;
   }
   .audit-list > div {
     flex-wrap: nowrap;

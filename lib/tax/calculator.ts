@@ -926,6 +926,8 @@ export function calculatePgblStudy(
     Math.max(0, traditionalAfterFees - totalRegular) *
       assumptions.traditionalGainsTaxRate,
   );
+  const traditionalNet = money(traditionalAfterFees - traditionalTax);
+  const advantage = money(final.pgblNet - traditionalNet);
   const series = Array.from({ length: years }, (_, index) => {
     const year = index + 1;
     const projected = projectAt(year);
@@ -960,10 +962,11 @@ export function calculatePgblStudy(
       gainsTax: traditionalTax,
       effectiveTaxRate:
         traditionalAfterFees > 0 ? traditionalTax / traditionalAfterFees : 0,
-      netBalance: money(traditionalAfterFees - traditionalTax),
+      netBalance: traditionalNet,
     },
     pgblStrategyNet: final.pgblNet,
-    advantage: money(final.pgblNet - (traditionalAfterFees - traditionalTax)),
+    advantage,
+    advantagePercent: traditionalNet > 0 ? advantage / traditionalNet : 0,
     lots: final.pgblLots,
     series,
   };

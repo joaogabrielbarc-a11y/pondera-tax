@@ -1822,6 +1822,24 @@ function OptimizerView({
     }));
     setExtra(0);
   };
+  const resetSavedContribution = () => {
+    if (state.deductions.pgblDirect <= 0) return;
+    if (
+      !window.confirm(
+        "Zerar o aporte PGBL salvo fora da folha? Os aportes da previdência empresarial não serão alterados.",
+      )
+    )
+      return;
+    setState((current) => ({
+      ...current,
+      deductions: { ...current.deductions, pgblDirect: 0 },
+    }));
+    setExtra(0);
+  };
+  const hasComparableStudy =
+    contribution > 0 && study.traditional.netBalance > 0;
+  const pgblWins = hasComparableStudy && study.advantage > 0;
+  const pgblLoses = hasComparableStudy && study.advantage < 0;
 
   return (
     <div className="space-y-5">
@@ -1844,16 +1862,64 @@ function OptimizerView({
           </strong>
         </span>
         <span>
-          Vantagem futura projetada
+          Ganho relativo do PGBL
           <strong
             className={
-              study.advantage >= 0 ? "text-emerald-300" : "text-amber-300"
+              pgblWins
+                ? "text-emerald-300"
+                : pgblLoses
+                  ? "text-amber-300"
+                  : "text-slate-300"
             }
           >
-            {study.advantage >= 0 ? "+ " : "− "}
-            {formatBRL(Math.abs(study.advantage))}
+            {hasComparableStudy
+              ? `${study.advantage >= 0 ? "+" : "−"}${formatPercent(Math.abs(study.advantagePercent))}`
+              : "—"}
           </strong>
+          <small>
+            {hasComparableStudy
+              ? `${study.advantage >= 0 ? "+" : "−"} ${formatBRL(Math.abs(study.advantage))}`
+              : "Defina um aporte para comparar"}
+          </small>
         </span>
+      </div>
+
+      <div role="status" aria-live="polite">
+        <Card
+          className={cn(
+            "pgbl-verdict p-5",
+            pgblWins && "pgbl-verdict-positive",
+            pgblLoses && "pgbl-verdict-negative",
+            !hasComparableStudy && "pgbl-verdict-neutral",
+          )}
+        >
+          <span className="pgbl-verdict-icon">
+            {pgblWins ? (
+              <ArrowUpRight />
+            ) : pgblLoses ? (
+              <ArrowDownRight />
+            ) : (
+              <Info />
+            )}
+          </span>
+          <div>
+            <p className="section-kicker">Diagnóstico do comparativo</p>
+            <h2>
+              {pgblWins
+                ? `O PGBL ganha do investimento tradicional em ${formatPercent(Math.abs(study.advantagePercent))}.`
+                : pgblLoses
+                  ? `O PGBL perde para o investimento tradicional em ${formatPercent(Math.abs(study.advantagePercent))}.`
+                  : hasComparableStudy
+                    ? "PGBL e investimento tradicional terminam empatados."
+                    : "Informe um aporte para comparar as duas estratégias."}
+            </h2>
+            <p>
+              {hasComparableStudy
+                ? `Diferença líquida projetada de ${formatBRL(Math.abs(study.advantage))} ao final de ${years} anos, considerando as premissas abaixo.`
+                : "O diagnóstico considera patrimônio líquido após taxas e impostos, incluindo o reinvestimento configurado do benefício fiscal."}
+            </p>
+          </div>
+        </Card>
       </div>
 
       <div className="optimizer-grid">
@@ -1918,6 +1984,23 @@ function OptimizerView({
             onChange={(event) => setExtra(Number(event.target.value))}
             className="pgbl-range mt-5 w-full"
           />
+          <div className="saved-pgbl-row">
+            <div>
+              <span>Aporte externo efetivado nas deduções</span>
+              <strong>{formatBRL(state.deductions.pgblDirect)}</strong>
+              <small>
+                Não inclui PGBL descontado na folha ou contrapartida patronal.
+              </small>
+            </div>
+            <Button
+              variant="outline"
+              onClick={resetSavedContribution}
+              disabled={state.deductions.pgblDirect <= 0}
+              className="border-red-400/20 bg-red-400/[.04] text-red-300 hover:bg-red-400/10 hover:text-red-200"
+            >
+              <RotateCcw /> Zerar aporte salvo
+            </Button>
+          </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="soft-stat">
               <span>Limite anual</span>
@@ -3472,7 +3555,7 @@ export function TaxApp() {
     const href = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = href;
-    anchor.download = "pondera-tax-2026-v1.4.json";
+    anchor.download = "pondera-tax-2026-v1.4.1.json";
     anchor.click();
     URL.revokeObjectURL(href);
   };
@@ -3670,7 +3753,7 @@ export function TaxApp() {
               </p>
             </div>
             <span className="rounded-full border border-white/8 bg-white/[.025] px-3 py-1.5 text-[11px] text-slate-400">
-              Versão 1.4.0
+              Versão 1.4.1
             </span>
           </div>
           {view === "dados" && (

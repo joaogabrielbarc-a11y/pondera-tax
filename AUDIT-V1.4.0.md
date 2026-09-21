@@ -2,6 +2,12 @@
 
 Ano-calendário 2026, exercício 2027. Revisão de 21/09/2026.
 
+## Ajustes V1.4.1
+
+- Controle para zerar o aporte PGBL externo salvo, sem alterar a previdência empresarial em folha.
+- Vantagem ou desvantagem percentual calculada sobre o patrimônio líquido do investimento tradicional.
+- Diagnóstico visual informa se o PGBL ganha, perde ou empata, com diferença percentual e monetária.
+
 ## Problemas identificados e corrigidos
 
 | Problema                                                       | Correção V1.4                                                                                                                                                                      |

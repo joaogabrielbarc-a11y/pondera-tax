@@ -269,6 +269,7 @@ export type PgblStudyResult = {
   };
   pgblStrategyNet: number;
   advantage: number;
+  advantagePercent: number;
   lots: Array<{
     contributionYear: number;
     ageAtRedemption: number;

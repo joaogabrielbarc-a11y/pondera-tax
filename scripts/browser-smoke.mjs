@@ -225,10 +225,24 @@ try {
       .isVisible(),
   );
   assert.ok(await page.locator(".study-chart").isVisible());
+  assert.ok(await page.locator(".pgbl-verdict").isVisible());
+  assert.match(
+    await page.locator(".pgbl-verdict h2").innerText(),
+    /PGBL (ganha|perde)|empatados/,
+  );
   await page
     .getByRole("button", { name: "Salvar Aporte no Plano", exact: true })
     .click();
   await page.getByText("Salvo localmente", { exact: true }).waitFor();
+  const resetPgbl = page.getByRole("button", {
+    name: "Zerar aporte salvo",
+    exact: true,
+  });
+  assert.ok(await resetPgbl.isEnabled());
+  page.once("dialog", (dialog) => dialog.accept());
+  await resetPgbl.click();
+  await page.getByText("Salvo localmente", { exact: true }).waitFor();
+  assert.ok(await resetPgbl.isDisabled());
   await page
     .locator("aside")
     .getByRole("button", { name: "Rendas extras", exact: true })
@@ -329,6 +343,8 @@ try {
         "reload persistence",
         "pension auto-fill",
         "PGBL financial study",
+        "PGBL relative verdict",
+        "saved PGBL reset",
         "annual extra income",
         "no page overflow",
         "no browser errors",

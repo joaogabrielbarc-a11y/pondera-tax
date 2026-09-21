@@ -393,6 +393,10 @@ describe("regressões da auditoria V1.2", () => {
     expect(study.firstYearTaxEfficiency).toBeGreaterThan(0);
     expect(study.pgbl.administrationCost).toBeGreaterThan(0);
     expect(study.totalReinvestedBenefit).toBeGreaterThan(0);
+    expect(study.advantagePercent).toBeCloseTo(
+      study.advantage / study.traditional.netBalance,
+      8,
+    );
     expect(study.series).toHaveLength(20);
     expect(study.series.at(-1)?.pgblStrategyNet).toBe(study.pgblStrategyNet);
     expect(study.lots[0].taxRate).toBe(0.1);
