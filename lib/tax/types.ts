@@ -2,6 +2,7 @@ export type PayrollStatus = "actual" | "projected";
 
 export type PayrollMonth = {
   id: string;
+  employerId: string;
   month: number;
   status: PayrollStatus;
   salary: number;
@@ -24,6 +25,7 @@ export type PayrollMonth = {
 
 export type VacationEvent = {
   id: string;
+  employerId: string;
   month: number;
   daysTaken: number;
   daysSold: number;
@@ -52,6 +54,12 @@ export type ExtraIncome = {
   entryMode: "monthly" | "annual";
   carneLeaoPaid: boolean;
   carneLeaoPaidAmount: number;
+  carneLeaoPaidOverrideEnabled: boolean;
+};
+
+export type Employer = {
+  id: string;
+  name: string;
 };
 
 export type Dependent = {
@@ -84,10 +92,11 @@ export type AnnualDeductions = {
 };
 
 export type TaxState = {
-  version: 3;
+  version: 4;
   taxYear: 2026;
   exerciseYear: 2027;
   taxpayerName: string;
+  employers: Employer[];
   months: PayrollMonth[];
   vacations: VacationEvent[];
   extraIncome: ExtraIncome[];
@@ -103,6 +112,7 @@ export type TaxState = {
 };
 
 export type MonthlyResult = PayrollMonth & {
+  employerName: string;
   vacationDays: number;
   proratedSalary: number;
   grossTaxable: number;
@@ -114,12 +124,14 @@ export type MonthlyResult = PayrollMonth & {
   irrfCalculated: number;
   irrfUsed: number;
   vacationAdvanceDeduction: number;
+  vacationAdvanceReceived: number;
   vacationSettlementCredit: number;
   netIncome: number;
   fgts: number;
 };
 
 export type VacationResult = VacationEvent & {
+  employerName: string;
   baseVacation: number;
   constitutionalOneThird: number;
   taxableGross: number;
@@ -174,7 +186,24 @@ export type Projection = {
     irrfUsed: number;
     firstInstallment: number;
     secondInstallment: number;
+    sources: Array<{
+      employerId: string;
+      employerName: string;
+      gross: number;
+      inss: number;
+      taxableBase: number;
+      tax: number;
+      irrfUsed: number;
+    }>;
   };
+  employerSummaries: Array<{
+    employerId: string;
+    employerName: string;
+    grossTaxable: number;
+    irrf: number;
+    effectiveWithholdingRate: number;
+  }>;
+  consolidatedEffectiveRate: number;
   employerMatch: number;
   totalCarneLeaoPaid: number;
   warnings: string[];
@@ -207,43 +236,54 @@ export type Projection = {
 };
 
 export type PgblStudyAssumptions = {
-  contribution: number;
+  annualContribution: number;
   years: number;
+  inflationRate: number;
   pgblGrossReturnRate: number;
   traditionalGrossReturnRate: number;
   pgblAdminFeeRate: number;
   traditionalAdminFeeRate: number;
-  reinvestmentRate: number;
-  pgblExitTaxRate: number;
+  fiscalBenefitReinvestmentRate: number;
   traditionalGainsTaxRate: number;
 };
 
 export type PgblStudyResult = {
-  contribution: number;
-  taxEfficiency: number;
+  annualContribution: number;
+  firstYearTaxEfficiency: number;
+  totalContributions: number;
+  totalFiscalBenefit: number;
+  totalReinvestedBenefit: number;
   pgbl: {
     grossWithoutFees: number;
     administrationCost: number;
     redemptionTax: number;
-    netBalance: number;
-  };
-  reinvestment: {
-    grossBalance: number;
-    gainsTax: number;
+    effectiveTaxRate: number;
     netBalance: number;
   };
   traditional: {
     grossWithoutFees: number;
     administrationCost: number;
     gainsTax: number;
+    effectiveTaxRate: number;
     netBalance: number;
   };
   pgblStrategyNet: number;
   advantage: number;
+  lots: Array<{
+    contributionYear: number;
+    ageAtRedemption: number;
+    principal: number;
+    grossBalance: number;
+    taxRate: number;
+    tax: number;
+    netBalance: number;
+  }>;
   series: Array<{
     year: number;
     pgblStrategyNet: number;
     traditionalNet: number;
+    annualContribution: number;
+    fiscalBenefit: number;
   }>;
 };
 

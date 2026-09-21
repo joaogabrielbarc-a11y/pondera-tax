@@ -4,6 +4,7 @@ import {
   calculatePgblOpportunity,
   calculatePgblStudy,
   calculateProjection,
+  pgblRegressiveRate,
   progressiveTax,
   calculateThirteenth,
   money,
@@ -13,6 +14,7 @@ import { TAX_RULES_2026 } from "./rules-2026";
 import {
   createDependent,
   createExtraIncome,
+  createEmployment,
   createInitialState,
   createVacation,
   migrateTaxState,
@@ -286,10 +288,21 @@ describe("regressões da auditoria V1.2", () => {
     expect(unpaid.carneLeao[0].taxDue).toBe(986.79);
     expect(unpaid.totalCarneLeaoPaid).toBe(0);
     state.extraIncome[0].carneLeaoPaid = true;
+    state.extraIncome[0].carneLeaoPaidOverrideEnabled = true;
     state.extraIncome[0].carneLeaoPaidAmount = 900;
     const paid = calculateProjection(state);
     expect(paid.complete.taxableBase).toBe(unpaid.complete.taxableBase);
     expect(money(paid.complete.balance - unpaid.complete.balance)).toBe(900);
+  });
+
+  it("usa o DARF automático como pago quando não há override manual", () => {
+    const state = createInitialState();
+    state.extraIncome = [
+      { ...createExtraIncome(0), gross: 8_000, carneLeaoPaid: true },
+    ];
+    const result = calculateProjection(state);
+    expect(result.carneLeao[0].taxPaid).toBe(result.carneLeao[0].taxDue);
+    expect(result.totalCarneLeaoPaid).toBe(result.carneLeao[0].taxDue);
   });
 
   it("anual direto não inventa rateio mensal e compensa somente pagamento informado", () => {
@@ -301,6 +314,7 @@ describe("regressões da auditoria V1.2", () => {
         entryMode: "annual",
         gross: 96000,
         carneLeaoPaid: true,
+        carneLeaoPaidOverrideEnabled: true,
         carneLeaoPaidAmount: 1000,
       },
     ];
@@ -365,26 +379,24 @@ describe("regressões da auditoria V1.2", () => {
     const state = createInitialState();
     const current = calculateProjection(state);
     const study = calculatePgblStudy(state, {
-      contribution: current.pgbl.available * 2,
+      annualContribution: current.pgbl.available * 2,
       years: 20,
+      inflationRate: 0.045,
       pgblGrossReturnRate: 0.1,
       traditionalGrossReturnRate: 0.1,
       pgblAdminFeeRate: 0.01,
       traditionalAdminFeeRate: 0.002,
-      reinvestmentRate: 0.08,
-      pgblExitTaxRate: 0.1,
+      fiscalBenefitReinvestmentRate: 1,
       traditionalGainsTaxRate: 0.15,
     });
-    expect(study.contribution).toBe(current.pgbl.available);
-    expect(study.taxEfficiency).toBeGreaterThan(0);
+    expect(study.annualContribution).toBe(current.pgbl.available);
+    expect(study.firstYearTaxEfficiency).toBeGreaterThan(0);
     expect(study.pgbl.administrationCost).toBeGreaterThan(0);
-    expect(study.pgblStrategyNet).toBe(
-      money(study.pgbl.netBalance + study.reinvestment.netBalance),
-    );
-    expect(study.series).toHaveLength(21);
-    expect(study.series.at(-1)?.pgblStrategyNet).toBe(
-      study.pgblStrategyNet,
-    );
+    expect(study.totalReinvestedBenefit).toBeGreaterThan(0);
+    expect(study.series).toHaveLength(20);
+    expect(study.series.at(-1)?.pgblStrategyNet).toBe(study.pgblStrategyNet);
+    expect(study.lots[0].taxRate).toBe(0.1);
+    expect(study.lots.at(-1)?.taxRate).toBe(0.35);
   });
 
   it("aplica teto de educação individual e reconcilia somas com centavos", () => {
@@ -417,11 +429,47 @@ describe("regressões da auditoria V1.2", () => {
     legacy.version = 2;
     delete legacy.months[0].inssOverrideEnabled;
     const migrated = migrateTaxState(legacy);
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(4);
     expect(migrated.months[0].commission).toBe(350);
     expect(migrated.months[0].bonus).toBe(0);
     expect(migrated.months[0].inssOverrideEnabled).toBe(true);
     expect(migrateTaxState(migrated).months[0].commission).toBe(350);
+  });
+
+  it("calcula cada vínculo isoladamente e consolida a renda no ajuste", () => {
+    const state = createInitialState();
+    state.vacations = [];
+    state.months.forEach((month) => {
+      month.salary = 4_000;
+      month.overtime = 0;
+      month.commission = 0;
+      month.bonus = 0;
+      month.otherTaxable = 0;
+    });
+    const second = createEmployment("Segundo vínculo");
+    second.months.forEach((month) => (month.salary = 4_000));
+    const third = createEmployment("Terceiro vínculo");
+    third.months.forEach((month) => (month.salary = 4_000));
+    state.employers.push(second.employer, third.employer);
+    state.months.push(...second.months, ...third.months);
+    const result = calculateProjection(state);
+    expect(result.employerSummaries).toHaveLength(3);
+    expect(result.carneLeao).toHaveLength(12);
+    expect(Math.max(...result.months.map((month) => month.irrfUsed))).toBe(0);
+    expect(result.complete.taxDue).toBeGreaterThan(0);
+    expect(result.complete.balance).toBeLessThan(0);
+    expect(
+      result.warnings.some((warning) => warning.includes("Múltiplos vínculos")),
+    ).toBe(true);
+  });
+
+  it("aplica a tabela regressiva pela idade individual de cada lote", () => {
+    expect(pgblRegressiveRate(1)).toBe(0.35);
+    expect(pgblRegressiveRate(3)).toBe(0.3);
+    expect(pgblRegressiveRate(5)).toBe(0.25);
+    expect(pgblRegressiveRate(7)).toBe(0.2);
+    expect(pgblRegressiveRate(9)).toBe(0.15);
+    expect(pgblRegressiveRate(10)).toBe(0.1);
   });
 
   it.each([

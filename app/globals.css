@@ -828,7 +828,9 @@ button {
 main {
   min-width: 0;
 }
-main .grid > * { min-width: 0; }
+main .grid > * {
+  min-width: 0;
+}
 .audit-list h3 {
   color: #c7dbfa;
   font-weight: 600;
@@ -908,6 +910,9 @@ a:focus-visible {
   }
 }
 @media (max-width: 639px) {
+  .employer-switcher {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .section-heading {
     flex-wrap: wrap;
     gap: 12px;
@@ -1035,12 +1040,48 @@ a:focus-visible {
   text-align: right;
 }
 .payroll-table :is(th, td):nth-child(n + 3):nth-child(-n + 8),
-.vacation-table :is(th, td):nth-child(n + 2):nth-child(-n + 7),
-.pension-table :is(th, td):nth-child(n + 2),
+.vacation-table :is(th, td):nth-child(n + 3):nth-child(-n + 8),
+.pension-table :is(th, td):nth-child(n + 3),
 .extra-income-table :is(th, td):nth-child(n + 4):nth-child(-n + 7),
 .carne-leao-table :is(th, td):nth-child(n + 2),
-.family-table :is(th, td):nth-child(n + 3):nth-child(-n + 5) {
+.family-table :is(th, td):nth-child(n + 3):nth-child(-n + 5),
+.pgbl-lots-table :is(th, td):nth-child(n + 2) {
   text-align: right;
+}
+.employer-switcher {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 320px);
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  padding: 12px 18px;
+}
+.employer-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+.employer-tab {
+  flex: 0 0 auto;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 9px;
+  padding: 8px 12px;
+  color: #8798b1;
+  font-size: 12px;
+}
+.employer-tab-active {
+  border-color: rgb(99 151 255 / 0.45);
+  background: rgb(79 140 255 / 0.1);
+  color: #c9dcff;
+}
+.employer-name-input {
+  height: 36px !important;
+  border-color: rgb(255 255 255 / 0.09) !important;
+  background: #0a1422 !important;
+}
+.deduction-audit-card .grid > .field-label {
+  grid-template-rows: minmax(38px, auto) 42px minmax(18px, auto);
+  align-content: start;
 }
 .audit-list > div {
   min-height: 50px;

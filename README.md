@@ -1,12 +1,13 @@
 # Pondera Tax
 
-Simulador e otimizador local-first de IRPF para trabalhadores CLT. A versão 1.3.0 cobre o ano-calendário 2026 (exercício 2027) com navegação lateral retrátil, KPIs compactos, dados anuais, deduções, otimização PGBL, comparação e fechamento.
+Simulador e otimizador local-first de IRPF para trabalhadores CLT. A versão 1.4.0 cobre o ano-calendário 2026 (exercício 2027), múltiplos vínculos, Carnê-Leão automático e projeção multianual de PGBL por lotes.
 
-Veja o [relatório completo de correções e premissas da auditoria](AUDIT-V1.3.0.md).
+Veja o [relatório completo de correções e premissas da auditoria](AUDIT-V1.4.0.md).
 
-## Escopo da V1.3.0
+## Escopo da V1.4.0
 
-- 12 holerites com cálculo automático de INSS, base de IRRF, imposto e líquido.
+- Múltiplos vínculos, cada um com 12 holerites, retenção independente e consolidação anual.
+- Replicação em massa de proventos com edição individual posterior.
 - Overrides explícitos de IRRF e INSS, inclusive valor zero, com prévia em tempo real.
 - Previdência empresarial por percentual nos 12 meses e contrapartida da empresa.
 - Tabelas oficiais de referência e detalhamento de deduções por pessoa.
@@ -14,7 +15,8 @@ Veja o [relatório completo de correções e premissas da auditoria](AUDIT-V1.3.
 - 13º salário, PLR, bônus, PGBL e VGBL em folha.
 - Rendas extras com apuração mensal de Carnê-Leão para pessoa física ou exterior.
 - Dependentes com renda tributável, educação e despesas médicas.
-- Comparação completa × simplificada, trava do teto de 12% e estudo financeiro PGBL × investimento tradicional.
+- Comparação completa × simplificada, trava do teto de 12% e efetivação direta do aporte simulado.
+- Estudo PGBL × investimento tradicional com IPCA, reinvestimento do benefício fiscal e alíquota regressiva por lote.
 - Fechamento anual com renda total, base líquida, INSS, FGTS, IRRF e saldo.
 
 ## Rodar localmente
@@ -56,7 +58,7 @@ O workflow `.github/workflows/deploy-pages.yml` publica automaticamente a branch
 
 URL esperada:
 
-`https://joaogabrielbarc-a11y.github.io/pondera-tax/?v=1.3.0#dashboard`
+`https://joaogabrielbarc-a11y.github.io/pondera-tax/?v=1.4.0#dashboard`
 
 ## Referências tributárias
 

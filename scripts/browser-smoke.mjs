@@ -52,7 +52,8 @@ try {
   if (process.env.PONDERA_BROWSER_EXECUTABLE)
     options.executablePath = process.env.PONDERA_BROWSER_EXECUTABLE;
   if (process.env.PONDERA_BROWSER_ARGS_MODULE) {
-    const packed = (await import(process.env.PONDERA_BROWSER_ARGS_MODULE)).default;
+    const packed = (await import(process.env.PONDERA_BROWSER_ARGS_MODULE))
+      .default;
     options.args = packed.args;
   }
   if (process.env.PONDERA_CHROMIUM_MODULE) {
@@ -83,14 +84,16 @@ try {
   assert.equal(await page.locator(".topbar-kpi").count(), 3);
   await page.getByRole("button", { name: "Recolher barra lateral" }).click();
   await page.waitForTimeout(220);
-  assert.ok((await page.locator("aside").evaluate((node) => node.clientWidth)) <= 80);
+  assert.ok(
+    (await page.locator("aside").evaluate((node) => node.clientWidth)) <= 80,
+  );
   await page.getByRole("button", { name: "Expandir barra lateral" }).click();
   await page.waitForTimeout(220);
   for (const label of [
     "Holerites",
     "Férias",
     "PLR e 13º salário",
-    "Previdência empresarial",
+    "Previdência",
     "Rendas extras",
     "Família",
     "Deduções legais",
@@ -117,6 +120,13 @@ try {
     .getByRole("button", { name: "Holerites", exact: true })
     .click();
   await page
+    .getByRole("button", { name: "Adicionar vínculo", exact: true })
+    .click();
+  assert.equal(await page.locator(".employer-tab").count(), 2);
+  await page
+    .getByRole("tab", { name: "Empregador principal", exact: true })
+    .click();
+  await page
     .locator(".data-table tbody tr")
     .first()
     .getByRole("button")
@@ -128,6 +138,11 @@ try {
   );
   const before = await dialog.locator(".result-ribbon").innerText();
   await dialog.getByLabel("Salário base", { exact: true }).fill("20000");
+  await dialog
+    .getByLabel("Replicar proventos para os 12 meses deste vínculo", {
+      exact: true,
+    })
+    .check();
   assert.notEqual(
     await dialog.locator(".result-ribbon").innerText(),
     before,
@@ -171,7 +186,7 @@ try {
   await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await page
     .locator("aside")
-    .getByRole("button", { name: "Previdência empresarial", exact: true })
+    .getByRole("button", { name: "Previdência", exact: true })
     .click();
   await page
     .getByLabel("PGBL · % do salário base bruto", { exact: true })
@@ -202,7 +217,7 @@ try {
     .getByRole("button", { name: "Otimização", exact: true })
     .click();
   await page
-    .getByLabel("Aporte adicional simulado", { exact: true })
+    .getByLabel("Aporte a testar e efetivar", { exact: true })
     .fill("5000");
   assert.ok(
     await page
@@ -211,9 +226,33 @@ try {
   );
   assert.ok(await page.locator(".study-chart").isVisible());
   await page
+    .getByRole("button", { name: "Salvar Aporte no Plano", exact: true })
+    .click();
+  await page.getByText("Salvo localmente", { exact: true }).waitFor();
+  await page
     .locator("aside")
     .getByRole("button", { name: "Rendas extras", exact: true })
     .click();
+  await page
+    .getByRole("button", { name: "Adicionar renda", exact: true })
+    .first()
+    .click();
+  await page.getByLabel("Valor bruto", { exact: true }).fill("8000");
+  assert.ok(
+    await page
+      .getByText("DARF calculado automaticamente", { exact: true })
+      .isVisible(),
+  );
+  await page
+    .getByLabel("Carnê-Leão foi pago mensalmente?", { exact: true })
+    .check();
+  assert.equal(
+    await page
+      .getByLabel("DARF efetivamente pago neste mês", { exact: true })
+      .count(),
+    0,
+  );
+  await page.getByRole("button", { name: "Salvar renda", exact: true }).click();
   await page
     .getByRole("button", { name: "Adicionar renda", exact: true })
     .first()
@@ -238,7 +277,7 @@ try {
     "Holerites",
     "Férias",
     "PLR e 13º salário",
-    "Previdência empresarial",
+    "Previdência",
     "Rendas extras",
     "Família",
     "Deduções legais",
@@ -263,9 +302,16 @@ try {
     path: resolve(evidence, "mobile.png"),
     fullPage: true,
   });
-  for (const width of [320,390,768]) {
-    await page.setViewportSize({width,height:844});
-    assert.ok(await page.locator(".topbar-kpi strong").evaluateAll(nodes => nodes.every(n => n.scrollWidth <= n.clientWidth+1)), `KPI currency overflow at ${width}px`);
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    assert.ok(
+      await page
+        .locator(".topbar-kpi strong")
+        .evaluateAll((nodes) =>
+          nodes.every((n) => n.scrollWidth <= n.clientWidth + 1),
+        ),
+      `KPI currency overflow at ${width}px`,
+    );
   }
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(

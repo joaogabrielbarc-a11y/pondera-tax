@@ -84,7 +84,14 @@ export function calculateVacation(
   index: number,
 ): VacationResult {
   const event = state.vacations[index];
-  const month = state.months[event.month] ?? state.months[0];
+  const month =
+    state.months.find(
+      (item) =>
+        item.employerId === event.employerId && item.month === event.month,
+    ) ?? state.months[0];
+  const employerName =
+    state.employers.find((item) => item.id === event.employerId)?.name ??
+    "Fonte não identificada";
   const dailySalary = Math.max(0, month.salary) / 30;
   const baseVacation = money(
     dailySalary * event.daysTaken + event.taxableAverage,
@@ -98,7 +105,10 @@ export function calculateVacation(
   const earlierGross = sum(
     state.vacations
       .slice(0, index)
-      .filter((item) => item.month === event.month)
+      .filter(
+        (item) =>
+          item.month === event.month && item.employerId === event.employerId,
+      )
       .map((item) => {
         const base = money(dailySalary * item.daysTaken + item.taxableAverage);
         return money(base + money(base / 3));
@@ -121,6 +131,7 @@ export function calculateVacation(
 
   return {
     ...event,
+    employerName,
     baseVacation,
     constitutionalOneThird,
     taxableGross,
@@ -143,13 +154,16 @@ export function calculateMonthly(
   vacations: VacationResult[],
 ): MonthlyResult {
   const month = pensionMonth(state, monthIndex);
+  const employerName =
+    state.employers.find((item) => item.id === month.employerId)?.name ??
+    "Fonte não identificada";
+  const monthVacations = vacations.filter(
+    (event) =>
+      event.month === month.month && event.employerId === month.employerId,
+  );
   const vacationDays = Math.min(
     30,
-    sum(
-      vacations
-        .filter((event) => event.month === monthIndex)
-        .map((event) => event.daysTaken),
-    ),
+    sum(monthVacations.map((event) => event.daysTaken)),
   );
   const proratedSalary = money(
     (month.salary * Math.max(0, 30 - vacationDays)) / 30,
@@ -161,16 +175,8 @@ export function calculateMonthly(
       month.bonus +
       month.otherTaxable,
   );
-  const vacationGross = sum(
-    vacations
-      .filter((event) => event.month === monthIndex)
-      .map((event) => event.taxableGross),
-  );
-  const vacationInss = sum(
-    vacations
-      .filter((event) => event.month === monthIndex)
-      .map((event) => event.inssUsed),
-  );
+  const vacationGross = sum(monthVacations.map((event) => event.taxableGross));
+  const vacationInss = sum(monthVacations.map((event) => event.inssUsed));
   const inssCalculated = money(
     Math.max(0, calculateInss(grossTaxable + vacationGross) - vacationInss),
   );
@@ -191,7 +197,10 @@ export function calculateMonthly(
   const vacationAdvanceDeduction = sum(
     vacations
       .filter(
-        (event) => event.receivedAdvance && event.month + 1 === monthIndex,
+        (event) =>
+          event.employerId === month.employerId &&
+          event.receivedAdvance &&
+          event.month + 1 === month.month,
       )
       .map((event) => event.netAdvance),
   );
@@ -199,7 +208,16 @@ export function calculateMonthly(
   // already paid. Never deduct that advance from unrelated ordinary salary twice.
   const vacationSettlementCredit = sum(
     vacations
-      .filter((event) => event.month + 1 === monthIndex)
+      .filter(
+        (event) =>
+          event.employerId === month.employerId &&
+          event.month + 1 === month.month,
+      )
+      .map((event) => event.netAdvance),
+  );
+  const vacationAdvanceReceived = sum(
+    monthVacations
+      .filter((event) => event.receivedAdvance)
       .map((event) => event.netAdvance),
   );
   const netIncome = money(
@@ -218,6 +236,7 @@ export function calculateMonthly(
 
   return {
     ...month,
+    employerName,
     vacationDays,
     proratedSalary,
     grossTaxable,
@@ -229,6 +248,7 @@ export function calculateMonthly(
     irrfCalculated: irrf.tax,
     irrfUsed,
     vacationAdvanceDeduction,
+    vacationAdvanceReceived,
     vacationSettlementCredit,
     netIncome,
     fgts: money(grossTaxable * TAX_RULES_2026.fgtsRate),
@@ -238,7 +258,7 @@ export function calculateMonthly(
 // Annual entry is not arbitrarily divided by 12: monthly tax cannot be inferred.
 export function calculateCarneLeao(state: TaxState): CarneLeaoMonth[] {
   let carriedExpenses = 0;
-  return state.months.map((payroll, month) => {
+  return Array.from({ length: 12 }, (_, month) => {
     const all = state.extraIncome.filter(
       (e) => e.entryMode !== "annual" && e.month === month,
     );
@@ -256,22 +276,36 @@ export function calculateCarneLeao(state: TaxState): CarneLeaoMonth[] {
       Math.max(0, serviceExpenses + carriedExpenses - bookUsed),
     );
     const gross = sum(entries.map(entryTaxableGross));
+    const payrollDependents = Math.max(
+      0,
+      ...state.months
+        .filter((item) => item.month === month)
+        .map((item) => item.dependents),
+    );
     const legal = sum([
       ...entries.map((e) => e.inss),
       bookUsed,
-      Math.max(0, state.dependents.length - payroll.dependents) *
+      Math.max(0, state.dependents.length - payrollDependents) *
         TAX_RULES_2026.dependentMonthly,
     ]);
     const result = calculateMonthlyIrrf(gross, legal);
+    const automaticPaid = entries.some(
+      (entry) => entry.carneLeaoPaid && !entry.carneLeaoPaidOverrideEnabled,
+    );
+    const manuallyPaid = sum(
+      entries
+        .filter(
+          (entry) => entry.carneLeaoPaid && entry.carneLeaoPaidOverrideEnabled,
+        )
+        .map((entry) => entry.carneLeaoPaidAmount),
+    );
     return {
       month,
       gross,
       deductions: result.deductionUsed,
       taxableBase: result.taxableBase,
       taxDue: result.tax,
-      taxPaid: sum(
-        entries.map((e) => (e.carneLeaoPaid ? e.carneLeaoPaidAmount : 0)),
-      ),
+      taxPaid: automaticPaid ? result.tax : manuallyPaid,
     };
   });
 }
@@ -299,40 +333,67 @@ const entryTaxableGross = (entry: TaxState["extraIncome"][number]) =>
   );
 
 export function calculateThirteenth(state: TaxState) {
-  const extraAverage =
-    sum(
-      state.months.map(
-        (m) => m.overtime + m.commission + m.bonus + m.otherTaxable,
-      ),
-    ) / 12;
+  const sources = state.employers.map((employer) => {
+    const months = state.months.filter(
+      (item) => item.employerId === employer.id,
+    );
+    const december = months.find((item) => item.month === 11) ?? months.at(-1);
+    const extraAverage =
+      sum(
+        months.map(
+          (item) =>
+            item.overtime + item.commission + item.bonus + item.otherTaxable,
+        ),
+      ) / 12;
+    const gross = money((december?.salary ?? 0) + extraAverage);
+    const inss = calculateInss(gross);
+    const result = calculateMonthlyIrrf(
+      gross,
+      inss + (december?.dependents ?? 0) * TAX_RULES_2026.dependentMonthly,
+    );
+    return {
+      employerId: employer.id,
+      employerName: employer.name,
+      gross,
+      inss,
+      taxableBase: result.taxableBase,
+      tax: result.tax,
+      irrfUsed: result.tax,
+    };
+  });
+  const automaticGross = sum(sources.map((item) => item.gross));
+  const automaticInss = sum(sources.map((item) => item.inss));
+  const automaticTax = sum(sources.map((item) => item.tax));
   const gross = money(
     state.events.thirteenthGrossOverrideEnabled
       ? state.events.thirteenthGross
-      : state.months[11].salary + extraAverage,
+      : automaticGross,
   );
   const inss = money(
     state.events.thirteenthInssOverrideEnabled
       ? state.events.thirteenthInss
-      : calculateInss(gross),
+      : automaticInss,
   );
-  const result = calculateMonthlyIrrf(
-    gross,
-    inss + state.months[11].dependents * TAX_RULES_2026.dependentMonthly,
-  );
+  const tax =
+    state.events.thirteenthGrossOverrideEnabled ||
+    state.events.thirteenthInssOverrideEnabled
+      ? calculateMonthlyIrrf(gross, inss).tax
+      : automaticTax;
   const irrfUsed = money(
     state.events.thirteenthIrrfOverrideEnabled
       ? (state.events.thirteenthIrrf ?? 0)
-      : result.tax,
+      : tax,
   );
   const firstInstallment = money(gross / 2);
   return {
     gross,
     inss,
-    taxableBase: result.taxableBase,
-    tax: result.tax,
+    taxableBase: money(Math.max(0, gross - inss)),
+    tax,
     irrfUsed,
     firstInstallment,
     secondInstallment: money(gross - firstInstallment - inss - irrfUsed),
+    sources,
   };
 }
 
@@ -489,11 +550,17 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
   const adjustmentWithheld = money(
     totalWithheld - plrWithheld - thirteenthWithheld,
   );
-  const totalCarneLeaoPaid = sum(
-    state.extraIncome
-      .filter((e) => e.payerType !== "legalEntity" && e.carneLeaoPaid)
-      .map((e) => e.carneLeaoPaidAmount),
-  );
+  const totalCarneLeaoPaid = sum([
+    ...carneLeao.map((item) => item.taxPaid),
+    ...state.extraIncome
+      .filter(
+        (entry) =>
+          entry.entryMode === "annual" &&
+          entry.payerType !== "legalEntity" &&
+          entry.carneLeaoPaid,
+      )
+      .map((entry) => entry.carneLeaoPaidAmount),
+  ]);
   const totalPrepaid = sum([adjustmentWithheld, totalCarneLeaoPaid]);
 
   const complete = buildDeclaration(
@@ -542,6 +609,36 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
     state.events.plrGross - plrWithheld,
     -totalCarneLeaoPaid,
   ]);
+  const employerSummaries = state.employers.map((employer) => {
+    const sourceMonths = months.filter(
+      (item) => item.employerId === employer.id,
+    );
+    const sourceVacations = vacations.filter(
+      (item) => item.employerId === employer.id,
+    );
+    const sourceGross = sum([
+      ...sourceMonths.map((item) => item.grossTaxable),
+      ...sourceVacations.map((item) => item.taxableGross),
+    ]);
+    const sourceIrrf = sum([
+      ...sourceMonths.map((item) => item.irrfUsed),
+      ...sourceVacations.map((item) => item.irrfUsed),
+    ]);
+    return {
+      employerId: employer.id,
+      employerName: employer.name,
+      grossTaxable: sourceGross,
+      irrf: sourceIrrf,
+      effectiveWithholdingRate: sourceGross > 0 ? sourceIrrf / sourceGross : 0,
+    };
+  });
+  const consolidatedEffectiveRate =
+    grossTaxable > 0 ? complete.adjustmentTax / grossTaxable : 0;
+  const activeEmployers = employerSummaries.filter(
+    (item) => item.grossTaxable > 0,
+  );
+  const consolidatedWithholdingRate =
+    grossTaxable > 0 ? adjustmentWithheld / grossTaxable : 0;
 
   return {
     months,
@@ -561,6 +658,8 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
     annualInss,
     deductibleInss,
     thirteenth,
+    employerSummaries,
+    consolidatedEffectiveRate,
     employerMatch: sum(
       months.map((m) =>
         money(
@@ -589,12 +688,20 @@ function calculateProjectionCore(state: TaxState, extraPgbl = 0): Projection {
             "IRRF exclusivo informado diverge do previsto. Confira com a fonte pagadora: a diferença de PLR/13º não é compensada no ajuste anual.",
           ]
         : []),
+      ...(activeEmployers.length > 1 &&
+      consolidatedEffectiveRate - consolidatedWithholdingRate >= 0.01
+        ? [
+            `Múltiplos vínculos: cada fonte reteve IRRF isoladamente, mas a declaração consolida as rendas. A alíquota efetiva estimada sobe de ${(consolidatedWithholdingRate * 100).toFixed(1)}% retida para ${(consolidatedEffectiveRate * 100).toFixed(1)}% no ajuste anual.`,
+          ]
+        : []),
       ...(months.some(
         (m) =>
           m.inssUsed +
             sum(
               vacations
-                .filter((v) => v.month === m.month)
+                .filter(
+                  (v) => v.month === m.month && v.employerId === m.employerId,
+                )
                 .map((v) => v.inssUsed),
             ) >
           calculateInss(1e9),
@@ -676,124 +783,188 @@ const futureAfterAnnualFee = (
   years: number,
 ) => principal * Math.pow((1 + grossRate) * (1 - annualFee), years);
 
-const futureNetTraditional = (
-  principal: number,
-  grossRate: number,
-  annualFee: number,
-  gainsTaxRate: number,
-  years: number,
-) => {
-  const grossWithoutFees = principal * Math.pow(1 + grossRate, years);
-  const afterFees = futureAfterAnnualFee(
-    principal,
-    grossRate,
-    annualFee,
-    years,
-  );
-  const gainsTax = Math.max(0, afterFees - principal) * gainsTaxRate;
-  return {
-    grossWithoutFees: money(grossWithoutFees),
-    administrationCost: money(Math.max(0, grossWithoutFees - afterFees)),
-    gainsTax: money(gainsTax),
-    netBalance: money(afterFees - gainsTax),
-  };
-};
+export function pgblRegressiveRate(ageInYears: number) {
+  if (ageInYears < 2) return 0.35;
+  if (ageInYears < 4) return 0.3;
+  if (ageInYears < 6) return 0.25;
+  if (ageInYears < 8) return 0.2;
+  if (ageInYears < 10) return 0.15;
+  return 0.1;
+}
 
-/** Compara um aporte único em PGBL com investimento tradicional equivalente. */
+/** Projeta aportes anuais: cada lote PGBL mantém idade e alíquota regressiva próprias. */
 export function calculatePgblStudy(
   state: TaxState,
   assumptions: PgblStudyAssumptions,
 ): PgblStudyResult {
   const current = calculateProjectionCore(state, 0);
-  const contribution = money(
+  const annualContribution = money(
     Math.min(
       current.pgbl.available,
-      Math.max(0, assumptions.contribution),
+      Math.max(0, assumptions.annualContribution),
     ),
   );
   const years = Math.max(1, Math.min(50, Math.round(assumptions.years)));
-  const taxEfficiency = money(
+  const firstYearTaxEfficiency = money(
     Math.max(
       0,
       current.complete.taxDue -
-        calculateProjectionCore(state, contribution).complete.taxDue,
+        calculateProjectionCore(state, annualContribution).complete.taxDue,
     ),
   );
-  const traditional = futureNetTraditional(
-    contribution,
-    assumptions.traditionalGrossReturnRate,
-    assumptions.traditionalAdminFeeRate,
-    assumptions.traditionalGainsTaxRate,
-    years,
-  );
-  const pgblGrossWithoutFees =
-    contribution * Math.pow(1 + assumptions.pgblGrossReturnRate, years);
-  const pgblAfterFees = futureAfterAnnualFee(
-    contribution,
-    assumptions.pgblGrossReturnRate,
-    assumptions.pgblAdminFeeRate,
-    years,
-  );
-  const pgblTax = Math.max(0, pgblAfterFees) * assumptions.pgblExitTaxRate;
-  const pgbl = {
-    grossWithoutFees: money(pgblGrossWithoutFees),
-    administrationCost: money(
-      Math.max(0, pgblGrossWithoutFees - pgblAfterFees),
-    ),
-    redemptionTax: money(pgblTax),
-    netBalance: money(pgblAfterFees - pgblTax),
-  };
-  const reinvestment = futureNetTraditional(
-    taxEfficiency,
-    assumptions.reinvestmentRate,
-    0,
-    assumptions.traditionalGainsTaxRate,
-    years,
-  );
-  const pgblStrategyNet = money(pgbl.netBalance + reinvestment.netBalance);
-  const series = Array.from({ length: years + 1 }, (_, year) => {
-    const traditionalAtYear = futureNetTraditional(
-      contribution,
-      assumptions.traditionalGrossReturnRate,
-      assumptions.traditionalAdminFeeRate,
-      assumptions.traditionalGainsTaxRate,
-      year,
+  const efficiencyRate =
+    annualContribution > 0
+      ? Math.min(0.275, firstYearTaxEfficiency / annualContribution)
+      : 0;
+  const lots: Array<{
+    contributionYear: number;
+    regular: number;
+    reinvested: number;
+    principal: number;
+    fiscalBenefit: number;
+  }> = [];
+  let priorBenefit = 0;
+  for (let year = 1; year <= years; year++) {
+    const regular = money(
+      annualContribution * Math.pow(1 + assumptions.inflationRate, year - 1),
     );
-    const pgblAtYear = money(
-      futureAfterAnnualFee(
-        contribution,
+    const reinvested = money(
+      priorBenefit * assumptions.fiscalBenefitReinvestmentRate,
+    );
+    const principal = money(regular + reinvested);
+    const fiscalBenefit = money(principal * efficiencyRate);
+    lots.push({
+      contributionYear: year,
+      regular,
+      reinvested,
+      principal,
+      fiscalBenefit,
+    });
+    priorBenefit = fiscalBenefit;
+  }
+
+  const projectAt = (horizon: number) => {
+    const activeLots = lots.filter((lot) => lot.contributionYear <= horizon);
+    const pgblLots = activeLots.map((lot) => {
+      const ageAtRedemption = horizon - lot.contributionYear + 1;
+      const grossBalance = futureAfterAnnualFee(
+        lot.principal,
         assumptions.pgblGrossReturnRate,
         assumptions.pgblAdminFeeRate,
-        year,
-      ) *
-        (1 - assumptions.pgblExitTaxRate),
-    );
-    const reinvestmentAtYear = futureNetTraditional(
-      taxEfficiency,
-      assumptions.reinvestmentRate,
-      0,
+        ageAtRedemption,
+      );
+      const taxRate = pgblRegressiveRate(ageAtRedemption);
+      const tax = grossBalance * taxRate;
+      return {
+        contributionYear: lot.contributionYear,
+        ageAtRedemption,
+        principal: money(lot.principal),
+        grossBalance: money(grossBalance),
+        taxRate,
+        tax: money(tax),
+        netBalance: money(grossBalance - tax),
+      };
+    });
+    const traditionalLots = activeLots.map((lot) => {
+      const age = horizon - lot.contributionYear + 1;
+      const balance = futureAfterAnnualFee(
+        lot.regular,
+        assumptions.traditionalGrossReturnRate,
+        assumptions.traditionalAdminFeeRate,
+        age,
+      );
+      const tax =
+        Math.max(0, balance - lot.regular) *
+        assumptions.traditionalGainsTaxRate;
+      return { principal: lot.regular, balance, tax };
+    });
+    return {
+      pgblLots,
+      pgblNet: sum(pgblLots.map((lot) => lot.netBalance)),
+      traditionalNet: money(
+        sum(traditionalLots.map((lot) => lot.balance)) -
+          sum(traditionalLots.map((lot) => lot.tax)),
+      ),
+    };
+  };
+  const final = projectAt(years);
+  const totalContributions = sum(lots.map((lot) => lot.principal));
+  const totalRegular = sum(lots.map((lot) => lot.regular));
+  const pgblGrossWithoutFees = sum(
+    lots.map(
+      (lot) =>
+        lot.principal *
+        Math.pow(
+          1 + assumptions.pgblGrossReturnRate,
+          years - lot.contributionYear + 1,
+        ),
+    ),
+  );
+  const pgblGross = sum(final.pgblLots.map((lot) => lot.grossBalance));
+  const pgblTax = sum(final.pgblLots.map((lot) => lot.tax));
+  const traditionalGrossWithoutFees = sum(
+    lots.map(
+      (lot) =>
+        lot.regular *
+        Math.pow(
+          1 + assumptions.traditionalGrossReturnRate,
+          years - lot.contributionYear + 1,
+        ),
+    ),
+  );
+  const traditionalAfterFees = sum(
+    lots.map((lot) =>
+      futureAfterAnnualFee(
+        lot.regular,
+        assumptions.traditionalGrossReturnRate,
+        assumptions.traditionalAdminFeeRate,
+        years - lot.contributionYear + 1,
+      ),
+    ),
+  );
+  const traditionalTax = money(
+    Math.max(0, traditionalAfterFees - totalRegular) *
       assumptions.traditionalGainsTaxRate,
-      year,
-    );
+  );
+  const series = Array.from({ length: years }, (_, index) => {
+    const year = index + 1;
+    const projected = projectAt(year);
+    const lot = lots[index];
     return {
       year,
-      pgblStrategyNet: money(pgblAtYear + reinvestmentAtYear.netBalance),
-      traditionalNet: traditionalAtYear.netBalance,
+      pgblStrategyNet: projected.pgblNet,
+      traditionalNet: projected.traditionalNet,
+      annualContribution: lot.principal,
+      fiscalBenefit: lot.fiscalBenefit,
     };
   });
 
   return {
-    contribution,
-    taxEfficiency,
-    pgbl,
-    reinvestment: {
-      grossBalance: reinvestment.grossWithoutFees,
-      gainsTax: reinvestment.gainsTax,
-      netBalance: reinvestment.netBalance,
+    annualContribution,
+    firstYearTaxEfficiency,
+    totalContributions,
+    totalFiscalBenefit: sum(lots.map((lot) => lot.fiscalBenefit)),
+    totalReinvestedBenefit: sum(lots.map((lot) => lot.reinvested)),
+    pgbl: {
+      grossWithoutFees: pgblGrossWithoutFees,
+      administrationCost: money(Math.max(0, pgblGrossWithoutFees - pgblGross)),
+      redemptionTax: pgblTax,
+      effectiveTaxRate: pgblGross > 0 ? pgblTax / pgblGross : 0,
+      netBalance: final.pgblNet,
     },
-    traditional,
-    pgblStrategyNet,
-    advantage: money(pgblStrategyNet - traditional.netBalance),
+    traditional: {
+      grossWithoutFees: traditionalGrossWithoutFees,
+      administrationCost: money(
+        Math.max(0, traditionalGrossWithoutFees - traditionalAfterFees),
+      ),
+      gainsTax: traditionalTax,
+      effectiveTaxRate:
+        traditionalAfterFees > 0 ? traditionalTax / traditionalAfterFees : 0,
+      netBalance: money(traditionalAfterFees - traditionalTax),
+    },
+    pgblStrategyNet: final.pgblNet,
+    advantage: money(final.pgblNet - (traditionalAfterFees - traditionalTax)),
+    lots: final.pgblLots,
     series,
   };
 }

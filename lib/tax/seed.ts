@@ -1,10 +1,13 @@
 import type {
   Dependent,
+  Employer,
   ExtraIncome,
   PayrollMonth,
   TaxState,
   VacationEvent,
 } from "./types";
+
+export const PRIMARY_EMPLOYER_ID = "employer-primary";
 
 const monthNames = [
   "Janeiro",
@@ -25,15 +28,20 @@ const salaryFor = (month: number) => (month < 8 ? 12_608 : 13_124.93);
 
 export const monthLabel = (month: number) => monthNames[month] ?? "Mês";
 
-export const createBlankMonth = (month: number): PayrollMonth => ({
-  id: `2026-${String(month + 1).padStart(2, "0")}`,
+export const createBlankMonth = (
+  month: number,
+  employerId = PRIMARY_EMPLOYER_ID,
+  withDemoValues = employerId === PRIMARY_EMPLOYER_ID,
+): PayrollMonth => ({
+  id: `${employerId}-2026-${String(month + 1).padStart(2, "0")}`,
+  employerId,
   month,
   status: month < 8 ? "actual" : "projected",
-  salary: salaryFor(month),
+  salary: withDemoValues ? salaryFor(month) : 0,
   overtime: 0,
   commission: 0,
-  bonus: month === 5 ? 1_845 : 0,
-  otherTaxable: month === 5 ? 2_680 : 0,
+  bonus: withDemoValues && month === 5 ? 1_845 : 0,
+  otherTaxable: withDemoValues && month === 5 ? 2_680 : 0,
   nonTaxable: 0,
   dependents: 0,
   pension: 0,
@@ -50,8 +58,22 @@ export const createBlankMonth = (month: number): PayrollMonth => ({
 const randomId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-export const createVacation = (month = 0): VacationEvent => ({
+export const createEmployment = (name = "Novo vínculo") => {
+  const employer: Employer = { id: randomId("employer"), name };
+  return {
+    employer,
+    months: Array.from({ length: 12 }, (_, month) =>
+      createBlankMonth(month, employer.id, false),
+    ),
+  };
+};
+
+export const createVacation = (
+  month = 0,
+  employerId = PRIMARY_EMPLOYER_ID,
+): VacationEvent => ({
   id: randomId("vacation"),
+  employerId,
   month,
   daysTaken: 0,
   daysSold: 0,
@@ -77,6 +99,7 @@ export const createExtraIncome = (month = 0): ExtraIncome => ({
   entryMode: "monthly",
   carneLeaoPaid: false,
   carneLeaoPaidAmount: 0,
+  carneLeaoPaidOverrideEnabled: false,
 });
 
 export const createDependent = (): Dependent => ({
@@ -89,10 +112,11 @@ export const createDependent = (): Dependent => ({
 });
 
 export const createInitialState = (): TaxState => ({
-  version: 3,
+  version: 4,
   taxYear: 2026,
   exerciseYear: 2027,
   taxpayerName: "Seu planejamento",
+  employers: [{ id: PRIMARY_EMPLOYER_ID, name: "Empregador principal" }],
   months: Array.from({ length: 12 }, (_, month) => createBlankMonth(month)),
   vacations: [
     {
@@ -145,6 +169,7 @@ type LegacyMonth = Partial<PayrollMonth> & {
 type LegacyState = {
   version?: number;
   retirement?: TaxState["retirement"];
+  employers?: Employer[];
   taxpayerName?: string;
   dependents?: number | Dependent[];
   months?: LegacyMonth[];
@@ -161,32 +186,57 @@ export function migrateTaxState(value: unknown): TaxState {
   const incoming = value as LegacyState;
   const base = createInitialState();
 
-  if (incoming.version === 2 || incoming.version === 3) {
+  if (
+    incoming.version === 2 ||
+    incoming.version === 3 ||
+    incoming.version === 4
+  ) {
+    const employers = incoming.employers?.length
+      ? incoming.employers
+      : [{ id: PRIMARY_EMPLOYER_ID, name: "Empregador principal" }];
+    const incomingMonths = incoming.months ?? [];
+    const migratedMonths =
+      incoming.version === 4
+        ? incomingMonths.map((item, index) => ({
+            ...createBlankMonth(
+              item.month ?? index % 12,
+              item.employerId ?? employers[0].id,
+              false,
+            ),
+            ...item,
+            employerId: item.employerId ?? employers[0].id,
+          }))
+        : base.months.map((fallback, index) => ({
+            ...fallback,
+            ...(incomingMonths[index] ?? {}),
+            employerId: employers[0].id,
+            month: index,
+            commission:
+              (incomingMonths[index]?.commission ?? fallback.commission) +
+              (incomingMonths[index]?.bonus ?? fallback.bonus),
+            bonus: 0,
+            inssOverrideEnabled:
+              incomingMonths[index]?.inssOverrideEnabled ??
+              incomingMonths[index]?.actualInss != null,
+          }));
     return {
       ...base,
       ...incoming,
-      version: 3,
-      months: base.months.map((fallback, index) => ({
-        ...fallback,
-        ...(incoming.months?.[index] ?? {}),
-        month: index,
-        commission:
-          (incoming.months?.[index]?.commission ?? fallback.commission) +
-          (incoming.months?.[index]?.bonus ?? fallback.bonus),
-        bonus: 0,
-        inssOverrideEnabled:
-          incoming.months?.[index]?.inssOverrideEnabled ??
-          incoming.months?.[index]?.actualInss != null,
-      })),
+      version: 4,
+      employers,
+      months: migratedMonths,
       vacations: (incoming.vacations ?? []).map((event) => ({
-        ...createVacation(event.month),
+        ...createVacation(event.month, event.employerId ?? employers[0].id),
         ...event,
+        employerId: event.employerId ?? employers[0].id,
         inssOverrideEnabled:
           event.inssOverrideEnabled ?? event.actualInss != null,
       })),
       extraIncome: (incoming.extraIncome ?? []).map((entry) => ({
         ...createExtraIncome(entry.month),
         ...entry,
+        carneLeaoPaidOverrideEnabled:
+          entry.carneLeaoPaidOverrideEnabled ?? entry.carneLeaoPaidAmount > 0,
       })),
       retirement: { ...base.retirement, ...incoming.retirement },
       dependents: Array.isArray(incoming.dependents) ? incoming.dependents : [],
@@ -223,6 +273,7 @@ export function migrateTaxState(value: unknown): TaxState {
     return {
       ...fallback,
       ...payroll,
+      employerId: PRIMARY_EMPLOYER_ID,
       month: index,
       vgblPayroll: 0,
       commission:
@@ -261,6 +312,7 @@ export function migrateTaxState(value: unknown): TaxState {
   return {
     ...base,
     taxpayerName: incoming.taxpayerName ?? base.taxpayerName,
+    employers: base.employers,
     months,
     vacations,
     dependents,
