@@ -419,7 +419,12 @@ function ProjectionChart({ projection }: { projection: Projection }) {
       className="h-[250px] w-full"
       aria-label="Gráfico mensal de renda tributável e IRRF"
     >
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer
+        width="100%"
+        height="100%"
+        minWidth={0}
+        minHeight={250}
+      >
         <AreaChart
           data={data}
           margin={{ top: 12, right: 4, left: -16, bottom: 0 }}
@@ -2027,7 +2032,12 @@ function OptimizerView({
             aria-label="Evolução patrimonial comparada"
           >
             {isClient ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={0}
+                minHeight={330}
+              >
                 <AreaChart
                   data={study.series}
                   margin={{ top: 10, right: 8, left: -16, bottom: 0 }}
