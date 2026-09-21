@@ -424,6 +424,7 @@ function ProjectionChart({ projection }: { projection: Projection }) {
         height="100%"
         minWidth={0}
         minHeight={250}
+        initialDimension={{ width: 900, height: 250 }}
       >
         <AreaChart
           data={data}
@@ -2037,6 +2038,7 @@ function OptimizerView({
                 height="100%"
                 minWidth={0}
                 minHeight={330}
+                initialDimension={{ width: 780, height: 330 }}
               >
                 <AreaChart
                   data={study.series}
