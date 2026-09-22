@@ -1,10 +1,10 @@
 # Pondera Tax
 
-Simulador e otimizador local-first de IRPF para trabalhadores CLT. A versão 1.4.1 cobre o ano-calendário 2026 (exercício 2027), múltiplos vínculos, Carnê-Leão automático e projeção multianual de PGBL por lotes.
+Simulador e otimizador local-first de IRPF para trabalhadores CLT. A versão 1.4.2 cobre o ano-calendário 2026 (exercício 2027), múltiplos vínculos, Carnê-Leão automático, projeção multianual de PGBL por lotes e ajuda contextual em todas as seções.
 
 Veja o [relatório completo de correções e premissas da auditoria](AUDIT-V1.4.0.md).
 
-## Escopo da V1.4.1
+## Escopo da V1.4.2
 
 - Múltiplos vínculos, cada um com 12 holerites, retenção independente e consolidação anual.
 - Replicação em massa de proventos com edição individual posterior.
@@ -18,6 +18,8 @@ Veja o [relatório completo de correções e premissas da auditoria](AUDIT-V1.4.
 - Comparação completa × simplificada, trava do teto de 12% e efetivação direta do aporte simulado.
 - Estudo PGBL × investimento tradicional com IPCA, reinvestimento do benefício fiscal e alíquota regressiva por lote.
 - Diagnóstico do ganho ou perda percentual do PGBL e controle para zerar o aporte externo efetivado.
+- Descrições específicas e guia de preenchimento em todas as abas.
+- Confirmações destrutivas integradas ao design do Pondera.
 - Fechamento anual com renda total, base líquida, INSS, FGTS, IRRF e saldo.
 
 ## Rodar localmente
@@ -59,7 +61,7 @@ O workflow `.github/workflows/deploy-pages.yml` publica automaticamente a branch
 
 URL esperada:
 
-`https://joaogabrielbarc-a11y.github.io/pondera-tax/?v=1.4.1#dashboard`
+`https://joaogabrielbarc-a11y.github.io/pondera-tax/?v=1.4.2#dashboard`
 
 ## Referências tributárias
 

@@ -89,25 +89,39 @@ try {
   );
   await page.getByRole("button", { name: "Expandir barra lateral" }).click();
   await page.waitForTimeout(220);
-  for (const label of [
-    "Holerites",
-    "Férias",
-    "PLR e 13º salário",
-    "Previdência",
-    "Rendas extras",
-    "Família",
-    "Deduções legais",
-    "Otimização",
-    "Comparativo",
-    "Fechamento anual",
-    "Tabelas oficiais",
-  ]) {
+  const routes = [
+    ["Holerites", "Holerites e vínculos empregatícios"],
+    ["Férias", "Férias e adiantamentos"],
+    ["PLR e 13º salário", "PLR e 13º salário"],
+    ["Previdência", "Previdência descontada em folha"],
+    ["Rendas extras", "Rendas extras e Carnê-Leão"],
+    ["Família", "Grupo familiar e dependentes"],
+    ["Deduções legais", "Deduções do titular e dependentes"],
+    ["Otimização", "Otimização tributária"],
+    ["Comparativo", "Simplificada ou completa?"],
+    ["Fechamento anual", "Fechamento anual projetado"],
+    ["Tabelas oficiais", "Tabelas e regras oficiais"],
+  ];
+  for (const [label, title] of routes) {
     await page
       .locator("aside")
       .getByRole("button", { name: label, exact: true })
       .click();
     await page.waitForTimeout(80);
-    assert.ok(await page.locator("main").innerText(), label);
+    assert.ok(
+      await page.locator("main h1").filter({ hasText: title }).isVisible(),
+    );
+    const helpButton = page
+      .locator("main")
+      .getByRole("button", { name: `Ajuda sobre ${title}`, exact: true });
+    assert.ok(await helpButton.isVisible(), `missing help: ${label}`);
+    await helpButton.click();
+    const helpDialog = page.getByRole("dialog");
+    assert.ok(await helpDialog.getByText("Passo a passo").isVisible());
+    assert.ok(await helpDialog.getByText("Dúvidas comuns").isVisible());
+    await helpDialog
+      .getByRole("button", { name: "Entendi", exact: true })
+      .click();
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 2,
@@ -184,6 +198,19 @@ try {
     "20000",
   );
   await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.getByRole("tab", { name: "Vínculo 2", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Excluir vínculo", exact: true })
+    .click();
+  const employerDeleteDialog = page.getByRole("dialog");
+  assert.ok(
+    await employerDeleteDialog
+      .getByRole("heading", { name: "Excluir Vínculo 2?", exact: true })
+      .isVisible(),
+  );
+  await employerDeleteDialog
+    .getByRole("button", { name: "Cancelar", exact: true })
+    .click();
   await page
     .locator("aside")
     .getByRole("button", { name: "Previdência", exact: true })
@@ -239,8 +266,11 @@ try {
     exact: true,
   });
   assert.ok(await resetPgbl.isEnabled());
-  page.once("dialog", (dialog) => dialog.accept());
   await resetPgbl.click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Zerar aporte", exact: true })
+    .click();
   await page.getByText("Salvo localmente", { exact: true }).waitFor();
   assert.ok(await resetPgbl.isDisabled());
   await page
@@ -287,19 +317,7 @@ try {
     fullPage: true,
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const label of [
-    "Holerites",
-    "Férias",
-    "PLR e 13º salário",
-    "Previdência",
-    "Rendas extras",
-    "Família",
-    "Deduções legais",
-    "Otimização",
-    "Comparativo",
-    "Fechamento anual",
-    "Tabelas oficiais",
-  ]) {
+  for (const [label] of routes) {
     await page.getByRole("button", { name: "Abrir menu", exact: true }).click();
     await page
       .locator("aside")
@@ -345,6 +363,8 @@ try {
         "PGBL financial study",
         "PGBL relative verdict",
         "saved PGBL reset",
+        "section descriptions and help",
+        "styled destructive confirmation",
         "annual extra income",
         "no page overflow",
         "no browser errors",

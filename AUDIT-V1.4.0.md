@@ -2,6 +2,14 @@
 
 Ano-calendário 2026, exercício 2027. Revisão de 21/09/2026.
 
+## Ajustes V1.4.2
+
+- Substituição das confirmações nativas do navegador por modais acessíveis e alinhados ao design do Pondera.
+- Confirmação explícita para excluir vínculos, férias, rendas extras e dependentes, zerar o PGBL externo e restaurar os dados demonstrativos.
+- Cabeçalhos e descrições específicos para todas as seções da navegação.
+- Guia contextual em cada aba, com finalidade, passo a passo e dúvidas comuns de preenchimento.
+- Teste de interface ampliado para validar os 11 cabeçalhos, os 11 guias e as confirmações destrutivas.
+
 ## Ajustes V1.4.1
 
 - Controle para zerar o aporte PGBL externo salvo, sem alterar a previdência empresarial em folha.

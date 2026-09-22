@@ -695,6 +695,178 @@ button {
   background: #101a2b !important;
   color: #e8eef8 !important;
 }
+.page-context {
+  min-height: 94px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.055);
+  padding: 2px 0 20px;
+}
+.page-context-copy {
+  max-width: 760px;
+}
+.page-context-copy > p:last-child {
+  max-width: 680px;
+  line-height: 1.6;
+}
+.page-context-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.help-button svg {
+  height: 15px;
+  width: 15px;
+}
+.confirm-dialog,
+.help-dialog {
+  border-color: rgb(255 255 255 / 0.1) !important;
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      rgb(79 140 255 / 0.09),
+      transparent 18rem
+    ),
+    #101a2b !important;
+  color: #e8eef8 !important;
+  box-shadow: 0 28px 90px rgb(0 0 0 / 0.55) !important;
+}
+.confirm-dialog {
+  max-width: 480px !important;
+  gap: 18px !important;
+}
+.confirm-dialog-header,
+.help-dialog-header {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px !important;
+  text-align: left !important;
+}
+.confirm-dialog-header [data-slot="dialog-title"],
+.help-dialog-header [data-slot="dialog-title"] {
+  margin-top: 4px;
+  color: #f3f7fd;
+  font-size: 1.08rem;
+  line-height: 1.35;
+}
+.confirm-dialog-icon,
+.help-dialog-icon {
+  display: inline-flex;
+  height: 46px;
+  width: 46px;
+  flex: 0 0 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+}
+.confirm-dialog-icon {
+  border: 1px solid rgb(251 113 133 / 0.22);
+  background: rgb(251 113 133 / 0.09);
+  color: #fda4af;
+}
+.help-dialog-icon {
+  border: 1px solid rgb(99 151 255 / 0.24);
+  background: rgb(79 140 255 / 0.1);
+  color: #8bb5ff;
+}
+.confirm-dialog-icon svg,
+.help-dialog-icon svg {
+  height: 21px;
+  width: 21px;
+}
+.confirm-dialog-description {
+  color: #a8b6ca !important;
+  font-size: 0.9rem !important;
+  line-height: 1.65 !important;
+}
+.confirm-dialog-notice {
+  border: 1px solid rgb(251 113 133 / 0.14);
+  border-radius: 11px;
+  background: rgb(251 113 133 / 0.05);
+  padding: 11px 13px;
+  color: #c9959f;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+.help-dialog {
+  max-height: min(88dvh, 760px);
+  max-width: 650px !important;
+  overflow-y: auto;
+  gap: 20px !important;
+}
+.help-dialog-purpose {
+  border-left: 2px solid rgb(79 140 255 / 0.55);
+  padding-left: 14px;
+  color: #b4c1d3 !important;
+  font-size: 0.94rem !important;
+  line-height: 1.65 !important;
+}
+.help-dialog-section h3 {
+  margin-bottom: 12px;
+  color: #e8eef8;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+.help-dialog-section ol {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  counter-reset: help-step;
+  list-style: none;
+}
+.help-dialog-section ol li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  color: #aebcd0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  counter-increment: help-step;
+}
+.help-dialog-section ol li::before {
+  display: inline-flex;
+  height: 24px;
+  width: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(99 151 255 / 0.2);
+  border-radius: 8px;
+  background: rgb(79 140 255 / 0.07);
+  color: #8bb5ff;
+  content: counter(help-step);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.help-questions {
+  display: grid;
+  gap: 8px;
+}
+.help-questions details {
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-radius: 11px;
+  background: rgb(5 12 22 / 0.28);
+  padding: 0 13px;
+}
+.help-questions summary {
+  padding: 12px 0;
+  color: #cbd7e7;
+  font-size: 0.84rem;
+  font-weight: 550;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.help-questions details[open] summary {
+  color: #8bb5ff;
+}
+.help-questions p {
+  margin: 0;
+  border-top: 1px solid rgb(255 255 255 / 0.055);
+  padding: 11px 0 13px;
+  color: #8fa0b7;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
 .result-ribbon {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -910,6 +1082,29 @@ a:focus-visible {
   }
 }
 @media (max-width: 639px) {
+  .page-context {
+    align-items: flex-start;
+    padding-bottom: 16px;
+  }
+  .page-context-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .confirm-dialog,
+  .help-dialog {
+    padding: 20px !important;
+  }
+  .confirm-dialog-header,
+  .help-dialog-header {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .confirm-dialog-icon,
+  .help-dialog-icon {
+    height: 40px;
+    width: 40px;
+    flex-basis: 40px;
+    border-radius: 12px;
+  }
   .employer-switcher {
     grid-template-columns: minmax(0, 1fr);
   }

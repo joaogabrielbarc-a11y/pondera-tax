@@ -19,6 +19,7 @@ import {
   Download,
   FileSpreadsheet,
   Gauge,
+  HelpCircle,
   Info,
   Landmark,
   LayoutDashboard,
@@ -35,6 +36,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  TriangleAlert,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -197,6 +199,312 @@ const titles: Record<
   },
 };
 
+const dataSectionTitles: Record<
+  DataSection,
+  { eyebrow: string; title: string; description: string }
+> = {
+  holerites: {
+    eyebrow: "Renda CLT",
+    title: "Holerites e vínculos empregatícios",
+    description:
+      "Registre cada fonte pagadora e confira mensalmente salário, INSS, IRRF e valor líquido.",
+  },
+  ferias: {
+    eyebrow: "Eventos trabalhistas",
+    title: "Férias e adiantamentos",
+    description:
+      "Informe períodos gozados, dias vendidos e retenções para refletir corretamente o pagamento de férias.",
+  },
+  eventos: {
+    eyebrow: "Tributação exclusiva",
+    title: "PLR e 13º salário",
+    description:
+      "Consolide os pagamentos anuais tributados separadamente dos rendimentos mensais.",
+  },
+  previdencia: {
+    eyebrow: "Previdência empresarial",
+    title: "Previdência descontada em folha",
+    description:
+      "Registre somente PGBL ou VGBL descontado no holerite e a contrapartida oferecida pela empresa.",
+  },
+  rendas: {
+    eyebrow: "Rendimentos adicionais",
+    title: "Rendas extras e Carnê-Leão",
+    description:
+      "Inclua aluguéis, pró-labore e serviços para calcular o DARF e consolidar o ajuste anual.",
+  },
+  familia: {
+    eyebrow: "Declaração conjunta",
+    title: "Grupo familiar e dependentes",
+    description:
+      "Cadastre dependentes, suas despesas dedutíveis e eventuais rendimentos tributáveis.",
+  },
+};
+
+type ActivePageKey = Exclude<View, "dados"> | DataSection;
+type PageGuide = {
+  title: string;
+  purpose: string;
+  steps: string[];
+  questions: Array<{ question: string; answer: string }>;
+};
+
+type ConfirmationConfig = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+};
+
+const pageGuides: Record<ActivePageKey, PageGuide> = {
+  holerites: {
+    title: "Como preencher os holerites",
+    purpose:
+      "Esta seção reconstrói a retenção mensal de cada emprego e projeta a diferença que poderá aparecer na declaração anual.",
+    steps: [
+      "Crie um vínculo para cada empresa que pagou salário durante o ano.",
+      "Abra cada mês e informe salário base, ganhos extras e descontos do contracheque.",
+      "Use a replicação para meses iguais e depois corrija somente as exceções.",
+      "Ative o override de INSS ou IRRF apenas quando o valor real do holerite for diferente do cálculo automático.",
+    ],
+    questions: [
+      {
+        question: "Tenho dois empregos. Posso somar os salários?",
+        answer:
+          "Não. Crie um vínculo para cada empregador, pois cada empresa calcula o IRRF separadamente; o Pondera consolida tudo no ajuste anual.",
+      },
+      {
+        question: "Onde informo plano de saúde, empréstimo ou coparticipação?",
+        answer:
+          "Use descontos não dedutíveis no editor do mês. Eles alteram o líquido recebido, mas não reduzem automaticamente o IRPF.",
+      },
+    ],
+  },
+  ferias: {
+    title: "Como registrar as férias",
+    purpose:
+      "A seção separa a tributação das férias, identifica o abono isento e evita contar duas vezes o adiantamento no fluxo mensal.",
+    steps: [
+      "Adicione um evento para cada período de férias pago.",
+      "Selecione o vínculo, o mês do pagamento, os dias gozados e os dias vendidos.",
+      "Marque o adiantamento quando o valor tiver sido antecipado pela empresa.",
+      "Use os overrides somente para reproduzir os valores exatos de INSS e IRRF do recibo de férias.",
+    ],
+    questions: [
+      {
+        question: "A venda de 10 dias paga IR?",
+        answer:
+          "O abono pecuniário e o respectivo terço são tratados no simulador como rendimentos isentos.",
+      },
+      {
+        question: "Por que o líquido de outro mês pode diminuir?",
+        answer:
+          "Quando existe adiantamento, parte do salário já foi recebida com as férias e é descontada no fluxo do período indicado.",
+      },
+    ],
+  },
+  eventos: {
+    title: "Como preencher PLR e 13º salário",
+    purpose:
+      "PLR e 13º possuem apuração exclusiva e não devem ser misturados à base mensal comum.",
+    steps: [
+      "Informe a PLR bruta e mantenha o IRRF automático ou registre o valor exato do comprovante.",
+      "Revise o 13º calculado para cada vínculo a partir do salário e da média de ganhos extras.",
+      "Se necessário, substitua somente o IRRF do 13º pelo valor efetivamente retido.",
+    ],
+    questions: [
+      {
+        question: "O 13º entra no saldo da declaração?",
+        answer:
+          "A renda e o IRRF do 13º são exclusivos na fonte. O INSS correspondente é consolidado conforme a regra aplicada pelo simulador, sem duplicar a base do 13º.",
+      },
+      {
+        question: "Bônus anual entra aqui?",
+        answer:
+          "Somente se for uma PLR formal. Bônus salarial comum deve ser informado em ganhos extras no holerite do mês.",
+      },
+    ],
+  },
+  previdencia: {
+    title: "Como preencher a previdência",
+    purpose:
+      "Esta área registra exclusivamente a previdência empresarial descontada em folha e a parcela depositada pela empresa.",
+    steps: [
+      "Escolha o vínculo ao qual o plano pertence.",
+      "Informe o percentual de PGBL ou VGBL cobrado sobre o salário, ou preencha os valores mensais.",
+      "Indique o percentual de contrapartida da empresa para acompanhar o total patronal.",
+    ],
+    questions: [
+      {
+        question: "PGBL e VGBL têm o mesmo efeito no IR?",
+        answer:
+          "Não. O PGBL pode compor a dedução legal dentro do limite; o VGBL é registrado para fluxo e patrimônio, mas não reduz a base do IRPF.",
+      },
+      {
+        question: "Onde informo um aporte feito fora da empresa?",
+        answer:
+          "Simule e efetive aportes externos na aba Otimização. Não os repita nesta seção.",
+      },
+    ],
+  },
+  rendas: {
+    title: "Como registrar rendas extras",
+    purpose:
+      "A seção calcula a tributação de rendimentos fora do holerite e acompanha o Carnê-Leão que deveria ter sido recolhido.",
+    steps: [
+      "Adicione cada aluguel, pró-labore ou serviço e identifique o tipo de pagador.",
+      "Prefira lançamentos mensais para que o Carnê-Leão seja calculado na competência correta.",
+      "Informe apenas despesas legalmente vinculadas ao rendimento.",
+      "Marque o DARF como pago e use o override quando o valor recolhido for diferente do automático.",
+    ],
+    questions: [
+      {
+        question: "Quando há Carnê-Leão?",
+        answer:
+          "Em geral, para valores tributáveis recebidos de pessoa física ou do exterior. Pagamentos de pessoa jurídica normalmente usam IRRF quando aplicável.",
+      },
+      {
+        question: "Posso lançar o total do ano de uma vez?",
+        answer:
+          "Pode para projeção anual, mas o modo mensal é mais preciso para DARF, atraso e compensação por competência.",
+      },
+    ],
+  },
+  familia: {
+    title: "Como cadastrar dependentes",
+    purpose:
+      "Dependentes podem gerar deduções, mas seus rendimentos também precisam ser somados quando incluídos na declaração do titular.",
+    steps: [
+      "Cadastre somente quem atende aos critérios legais de dependência.",
+      "Informe despesas médicas e educacionais individualmente, guardando os comprovantes.",
+      "Ative a renda tributável e informe o total anual quando o dependente tiver recebido rendimentos.",
+    ],
+    questions: [
+      {
+        question: "Sempre vale a pena incluir um dependente?",
+        answer:
+          "Não necessariamente. A renda do dependente pode superar as deduções; compare o efeito antes de decidir.",
+      },
+      {
+        question: "Posso lançar a mesma despesa no titular e no dependente?",
+        answer:
+          "Não. Cada pagamento deve aparecer uma única vez e associado ao beneficiário correto.",
+      },
+    ],
+  },
+  deducoes: {
+    title: "Como revisar as deduções legais",
+    purpose:
+      "Aqui você informa despesas anuais comprováveis que reduzem a base do modelo completo.",
+    steps: [
+      "Informe saúde, educação, pensão judicial e outras deduções do titular.",
+      "Revise a composição consolidada para identificar limites e valores trazidos de outras abas.",
+      "Não repita INSS, PGBL em folha ou despesas já cadastradas por dependente.",
+    ],
+    questions: [
+      {
+        question: "Despesas médicas têm limite?",
+        answer:
+          "Não há teto geral, mas elas precisam ser elegíveis, comprovadas e informadas líquidas de reembolso.",
+      },
+      {
+        question: "Por que educação aparece limitada?",
+        answer:
+          "A legislação aplica um teto anual individual, mesmo que o valor efetivamente pago seja maior.",
+      },
+    ],
+  },
+  otimizacao: {
+    title: "Como usar a otimização de PGBL",
+    purpose:
+      "A aba testa aportes externos dentro do limite de 12% e compara o patrimônio líquido futuro com um investimento tradicional.",
+    steps: [
+      "Informe o aporte que deseja testar sem ultrapassar a margem disponível.",
+      "Ajuste prazo, rentabilidades, taxas, IPCA e reinvestimento do benefício fiscal.",
+      "Leia o diagnóstico de ganho ou perda antes de salvar o aporte no plano.",
+      "Use Zerar aporte salvo para retirar a dedução externa sem alterar a previdência em folha.",
+    ],
+    questions: [
+      {
+        question: "Atingir 12% sempre é a melhor escolha?",
+        answer:
+          "Não. A vantagem depende do modelo completo ser melhor, da sua alíquota, das taxas do fundo, do prazo e da tributação no resgate.",
+      },
+      {
+        question: "Salvar o aporte movimenta dinheiro?",
+        answer:
+          "Não. O botão apenas inclui o valor na simulação e nas deduções do Pondera; o aporte real deve ser feito na instituição financeira.",
+      },
+    ],
+  },
+  comparativo: {
+    title: "Como interpretar o comparativo",
+    purpose:
+      "O comparador aplica os mesmos rendimentos e impostos antecipados aos modelos simplificado e completo.",
+    steps: [
+      "Confira o imposto devido e as deduções utilizadas em cada modelo.",
+      "Observe o saldo final: restituição maior ou imposto a pagar menor indica o melhor resultado.",
+      "Volte às abas de dados caso algum valor não corresponda aos informes.",
+    ],
+    questions: [
+      {
+        question: "O modelo destacado é definitivo?",
+        answer:
+          "É uma projeção baseada nos dados atuais. Novos rendimentos, despesas ou retenções podem mudar a recomendação.",
+      },
+      {
+        question: "Desconto simplificado e deduções podem ser somados?",
+        answer:
+          "Não. A declaração usa um modelo ou o outro; o sistema compara as alternativas separadamente.",
+      },
+    ],
+  },
+  dashboard: {
+    title: "Como ler o fechamento anual",
+    purpose:
+      "O painel reúne a projeção anual de renda, tributos, deduções e saldo da declaração.",
+    steps: [
+      "Confirme a quantidade de meses realizados e projetados.",
+      "Revise renda, INSS, FGTS e IRRF consolidados.",
+      "Use o saldo recomendado como estimativa e confronte os valores com os informes oficiais.",
+    ],
+    questions: [
+      {
+        question: "Restituição significa que não houve imposto?",
+        answer:
+          "Não. Significa que os pagamentos antecipados superaram o imposto estimado no ajuste anual.",
+      },
+      {
+        question: "FGTS reduz o IRPF?",
+        answer:
+          "Não. Ele aparece como indicador trabalhista e patrimonial, sem reduzir a base tributável.",
+      },
+    ],
+  },
+  tabelas: {
+    title: "Como consultar as tabelas oficiais",
+    purpose:
+      "Esta aba documenta as faixas e parâmetros usados pelo motor de cálculo para o ano selecionado.",
+    steps: [
+      "Consulte a tabela correspondente ao cálculo que deseja conferir.",
+      "Verifique a vigência e a fonte indicada antes de comparar com outro ano-calendário.",
+      "Use os exemplos das demais abas para validar o resultado aplicado aos seus dados.",
+    ],
+    questions: [
+      {
+        question: "Posso editar as alíquotas aqui?",
+        answer:
+          "Não. Esta é uma área somente de leitura para preservar a consistência dos cálculos.",
+      },
+      {
+        question: "Por que a alíquota da tabela difere da alíquota efetiva?",
+        answer:
+          "A alíquota nominal incide apenas sobre a faixa correspondente; a efetiva considera o imposto total dividido pela base total.",
+      },
+    ],
+  },
+};
+
 const formatBRL = (value: number, compact = false) =>
   new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -229,6 +537,119 @@ function Card({
   children: React.ReactNode;
 }) {
   return <section className={cn("panel", className)}>{children}</section>;
+}
+
+function ConfirmDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  confirmLabel,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="confirm-dialog" showCloseButton={false}>
+        <DialogHeader className="confirm-dialog-header">
+          <span className="confirm-dialog-icon" aria-hidden="true">
+            <TriangleAlert />
+          </span>
+          <div>
+            <p className="section-kicker">Confirmar ação</p>
+            <DialogTitle>{title}</DialogTitle>
+          </div>
+        </DialogHeader>
+        <DialogDescription className="confirm-dialog-description">
+          {description}
+        </DialogDescription>
+        <div className="confirm-dialog-notice">
+          Os dados removidos não poderão ser recuperados depois da confirmação.
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            className="border-white/10 bg-transparent text-slate-200 hover:bg-white/5 hover:text-white"
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => {
+              onConfirm();
+              onOpenChange(false);
+            }}
+            className="border border-red-400/30 bg-red-500/15 text-red-200 hover:bg-red-500/25"
+          >
+            <Trash2 />
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HelpDialog({
+  open,
+  onOpenChange,
+  guide,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  guide: PageGuide;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="help-dialog">
+        <DialogHeader className="help-dialog-header">
+          <span className="help-dialog-icon" aria-hidden="true">
+            <HelpCircle />
+          </span>
+          <div>
+            <p className="section-kicker">Guia de preenchimento</p>
+            <DialogTitle>{guide.title}</DialogTitle>
+          </div>
+        </DialogHeader>
+        <DialogDescription className="help-dialog-purpose">
+          {guide.purpose}
+        </DialogDescription>
+        <section className="help-dialog-section">
+          <h3>Passo a passo</h3>
+          <ol>
+            {guide.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </section>
+        <section className="help-dialog-section">
+          <h3>Dúvidas comuns</h3>
+          <div className="help-questions">
+            {guide.questions.map((item) => (
+              <details key={item.question}>
+                <summary>{item.question}</summary>
+                <p>{item.answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+        <DialogFooter>
+          <Button
+            onClick={() => onOpenChange(false)}
+            className="bg-blue-500 text-white hover:bg-blue-400"
+          >
+            Entendi
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function StatusBadge({ status }: { status: PayrollMonth["status"] }) {
@@ -506,6 +927,7 @@ function PayrollTable({
   const [selectedEmployer, setSelectedEmployer] = useState(
     state.employers[0]?.id ?? "",
   );
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const activeEmployer = state.employers.some(
     (item) => item.id === selectedEmployer,
   )
@@ -517,6 +939,9 @@ function PayrollTable({
   const thirteenth = projection.thirteenth.sources.find(
     (item) => item.employerId === activeEmployer,
   );
+  const activeEmployerName =
+    state.employers.find((item) => item.id === activeEmployer)?.name ||
+    "este vínculo";
   const addEmployer = () => {
     const created = createEmployment(`Vínculo ${state.employers.length + 1}`);
     setState((current) => ({
@@ -528,13 +953,6 @@ function PayrollTable({
   };
   const deleteEmployer = () => {
     if (state.employers.length <= 1) return;
-    const employer = state.employers.find((item) => item.id === activeEmployer);
-    if (
-      !window.confirm(
-        `Excluir ${employer?.name ?? "este vínculo"} e seus holerites/férias?`,
-      )
-    )
-      return;
     setState((current) => ({
       ...current,
       employers: current.employers.filter((item) => item.id !== activeEmployer),
@@ -567,7 +985,7 @@ function PayrollTable({
           {state.employers.length > 1 && (
             <Button
               variant="outline"
-              onClick={deleteEmployer}
+              onClick={() => setDeleteDialogOpen(true)}
               className="border-red-400/20 bg-red-400/[.04] text-red-300"
             >
               <Trash2 /> Excluir vínculo
@@ -730,6 +1148,14 @@ function PayrollTable({
           {formatPercent(projection.consolidatedEffectiveRate)}.
         </div>
       )}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={`Excluir ${activeEmployerName}?`}
+        description={`Todos os holerites e eventos de férias vinculados a ${activeEmployerName} serão removidos do planejamento e dos cálculos consolidados.`}
+        confirmLabel="Excluir vínculo"
+        onConfirm={deleteEmployer}
+      />
     </Card>
   );
 }
@@ -1774,6 +2200,7 @@ function OptimizerView({
   const [fiscalBenefitReinvestment, setFiscalBenefitReinvestment] =
     useState(100);
   const [inflation, setInflation] = useState(4.5);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const isClient = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -1824,12 +2251,6 @@ function OptimizerView({
   };
   const resetSavedContribution = () => {
     if (state.deductions.pgblDirect <= 0) return;
-    if (
-      !window.confirm(
-        "Zerar o aporte PGBL salvo fora da folha? Os aportes da previdência empresarial não serão alterados.",
-      )
-    )
-      return;
     setState((current) => ({
       ...current,
       deductions: { ...current.deductions, pgblDirect: 0 },
@@ -1994,7 +2415,7 @@ function OptimizerView({
             </div>
             <Button
               variant="outline"
-              onClick={resetSavedContribution}
+              onClick={() => setResetDialogOpen(true)}
               disabled={state.deductions.pgblDirect <= 0}
               className="border-red-400/20 bg-red-400/[.04] text-red-300 hover:bg-red-400/10 hover:text-red-200"
             >
@@ -2263,6 +2684,14 @@ function OptimizerView({
           passada não garante resultado.
         </div>
       </Card>
+      <ConfirmDialog
+        open={resetDialogOpen}
+        onOpenChange={setResetDialogOpen}
+        title="Zerar o aporte PGBL salvo?"
+        description="O aporte externo será removido das deduções e da projeção. Os valores de PGBL descontados em folha e a contrapartida da empresa permanecerão intactos."
+        confirmLabel="Zerar aporte"
+        onConfirm={resetSavedContribution}
+      />
     </div>
   );
 }
@@ -3296,6 +3725,10 @@ export function TaxApp() {
   const [storageError, setStorageError] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationConfig | null>(
+    null,
+  );
   const [editingMonth, setEditingMonth] = useState<number | null>(null);
   const [editingVacation, setEditingVacation] = useState<number | "new" | null>(
     null,
@@ -3307,6 +3740,10 @@ export function TaxApp() {
     number | "new" | null
   >(null);
   const projection = useMemo(() => calculateProjection(state), [state]);
+  const activePageKey: ActivePageKey = view === "dados" ? dataSection : view;
+  const pageCopy =
+    view === "dados" ? dataSectionTitles[dataSection] : titles[view];
+  const activeGuide = pageGuides[activePageKey];
   const latestState = useRef(state);
 
   useEffect(() => {
@@ -3461,6 +3898,7 @@ export function TaxApp() {
 
   const navigate = (next: View, section?: DataSection) => {
     if (section) setDataSection(section);
+    setHelpOpen(false);
     window.history.pushState(null, "", `#${section ?? next}`);
     setView(next);
     setMobileMenu(false);
@@ -3555,7 +3993,7 @@ export function TaxApp() {
     const href = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = href;
-    anchor.download = "pondera-tax-2026-v1.4.1.json";
+    anchor.download = "pondera-tax-2026-v1.4.2.json";
     anchor.click();
     URL.revokeObjectURL(href);
   };
@@ -3742,19 +4180,31 @@ export function TaxApp() {
       </header>
       <main className="app-main pb-10">
         <div className="mx-auto max-w-[1480px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="section-kicker">{titles[view].eyebrow}</p>
+          <div className="page-context mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div className="page-context-copy">
+              <p className="section-kicker">{pageCopy.eyebrow}</p>
               <h1 className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-white sm:text-3xl">
-                {titles[view].title}
+                {pageCopy.title}
               </h1>
               <p className="mt-2 text-sm text-slate-400">
-                {titles[view].description}
+                {pageCopy.description}
               </p>
             </div>
-            <span className="rounded-full border border-white/8 bg-white/[.025] px-3 py-1.5 text-[11px] text-slate-400">
-              Versão 1.4.1
-            </span>
+            <div className="page-context-actions">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHelpOpen(true)}
+                className="help-button border-blue-400/20 bg-blue-500/[.06] text-blue-200 hover:bg-blue-500/[.12] hover:text-white"
+                aria-label={`Ajuda sobre ${pageCopy.title}`}
+              >
+                <HelpCircle />
+                Ajuda
+              </Button>
+              <span className="rounded-full border border-white/8 bg-white/[.025] px-3 py-1.5 text-[11px] text-slate-400">
+                Versão 1.4.2
+              </span>
+            </div>
           </div>
           {view === "dados" && (
             <DataView
@@ -3766,35 +4216,61 @@ export function TaxApp() {
               vacationActions={{
                 add: () => setEditingVacation("new"),
                 edit: setEditingVacation,
-                remove: (index) =>
-                  setState((current) => ({
-                    ...current,
-                    vacations: current.vacations.filter(
-                      (_, itemIndex) => itemIndex !== index,
-                    ),
-                  })),
+                remove: (index) => {
+                  const event = state.vacations[index];
+                  setConfirmation({
+                    title: `Excluir férias de ${event ? monthLabel(event.month) : "este período"}?`,
+                    description:
+                      "O evento, suas retenções e os reflexos do adiantamento serão removidos da projeção anual.",
+                    confirmLabel: "Excluir férias",
+                    onConfirm: () =>
+                      setState((current) => ({
+                        ...current,
+                        vacations: current.vacations.filter(
+                          (_, itemIndex) => itemIndex !== index,
+                        ),
+                      })),
+                  });
+                },
               }}
               incomeActions={{
                 add: () => setEditingIncome("new"),
                 edit: setEditingIncome,
-                remove: (index) =>
-                  setState((current) => ({
-                    ...current,
-                    extraIncome: current.extraIncome.filter(
-                      (_, itemIndex) => itemIndex !== index,
-                    ),
-                  })),
+                remove: (index) => {
+                  const income = state.extraIncome[index];
+                  setConfirmation({
+                    title: "Excluir esta renda extra?",
+                    description: `${formatBRL(income?.gross ?? 0)} serão retirados dos rendimentos tributáveis, junto com o IRRF e o Carnê-Leão associados ao lançamento.`,
+                    confirmLabel: "Excluir renda",
+                    onConfirm: () =>
+                      setState((current) => ({
+                        ...current,
+                        extraIncome: current.extraIncome.filter(
+                          (_, itemIndex) => itemIndex !== index,
+                        ),
+                      })),
+                  });
+                },
               }}
               dependentActions={{
                 add: () => setEditingDependent("new"),
                 edit: setEditingDependent,
-                remove: (index) =>
-                  setState((current) => ({
-                    ...current,
-                    dependents: current.dependents.filter(
-                      (_, itemIndex) => itemIndex !== index,
-                    ),
-                  })),
+                remove: (index) => {
+                  const dependent = state.dependents[index];
+                  setConfirmation({
+                    title: `Excluir ${dependent?.name || "este dependente"}?`,
+                    description:
+                      "A dedução fixa, as despesas e os rendimentos vinculados serão removidos do cálculo da declaração completa.",
+                    confirmLabel: "Excluir dependente",
+                    onConfirm: () =>
+                      setState((current) => ({
+                        ...current,
+                        dependents: current.dependents.filter(
+                          (_, itemIndex) => itemIndex !== index,
+                        ),
+                      })),
+                  });
+                },
               }}
             />
           )}
@@ -3833,8 +4309,13 @@ export function TaxApp() {
             </span>
             <button
               onClick={() => {
-                if (window.confirm("Restaurar os dados de exemplo da V1.4?"))
-                  setState(createInitialState());
+                setConfirmation({
+                  title: "Restaurar os dados de exemplo?",
+                  description:
+                    "Todo o planejamento salvo neste navegador será substituído pelos dados demonstrativos da versão atual.",
+                  confirmLabel: "Restaurar exemplo",
+                  onConfirm: () => setState(createInitialState()),
+                });
               }}
               className="inline-flex items-center gap-1.5 hover:text-slate-400"
             >
@@ -3844,6 +4325,21 @@ export function TaxApp() {
           </div>
         </div>
       </main>
+      <HelpDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        guide={activeGuide}
+      />
+      <ConfirmDialog
+        open={confirmation !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmation(null);
+        }}
+        title={confirmation?.title ?? "Confirmar ação"}
+        description={confirmation?.description ?? ""}
+        confirmLabel={confirmation?.confirmLabel ?? "Confirmar"}
+        onConfirm={() => confirmation?.onConfirm()}
+      />
       <MonthDialog
         key={`month-${editingMonth ?? "closed"}`}
         open={editingMonth !== null}
